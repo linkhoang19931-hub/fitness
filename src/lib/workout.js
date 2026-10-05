@@ -1,6 +1,7 @@
 import { db } from './db';
 import { dayOf, programById, programOfWorkout } from './program';
 import { todayStr } from './utils';
+import { useSettings } from './store';
 
 // Buổi đã hoàn thành gần nhất (để suy ra nhóm cơ kế tiếp)
 // sinceTs: chỉ tính các buổi hoàn thành sau mốc "bắt đầu lại chu kỳ"
@@ -54,7 +55,7 @@ export async function previousByExercise(names, excludeId = null) {
 
 export async function startWorkout(programId, dayIndex) {
   const program = programById(programId);
-  const day = dayOf(program, dayIndex);
+  const day = dayOf(program, dayIndex, useSettings.getState().programEdits);
   const { byExercise } = await previousByExercise(day.exercises.map((e) => e.name));
   return db.transaction('rw', db.workouts, db.exerciseLogs, async () => {
     const workoutId = await db.workouts.add({
@@ -76,6 +77,23 @@ export async function startWorkout(programId, dayIndex) {
     await db.exerciseLogs.bulkAdd(rows);
     return workoutId;
   });
+}
+
+// Thêm một bài vào buổi đang tập (đặt cuối danh sách); số set mặc định theo lần tập trước của bài đó
+export async function addExerciseToWorkout(workoutId, name, sets = 3) {
+  const logs = await db.exerciseLogs.where('workoutId').equals(workoutId).toArray();
+  if (logs.some((l) => l.exerciseName === name)) return false;
+  const order = logs.reduce((m, l) => Math.max(m, l.exerciseOrder ?? 0), -1) + 1;
+  const { byExercise } = await previousByExercise([name], workoutId);
+  const n = Math.max(sets, byExercise[name]?.length || 0);
+  const rows = [];
+  for (let i = 1; i <= n; i++) rows.push({ workoutId, exerciseName: name, exerciseOrder: order, setIndex: i, weightKg: null, reps: null, isCompleted: 0 });
+  await db.exerciseLogs.bulkAdd(rows);
+  return true;
+}
+
+export async function removeExerciseFromWorkout(workoutId, name) {
+  await db.exerciseLogs.where('workoutId').equals(workoutId).filter((l) => l.exerciseName === name).delete();
 }
 
 export async function addSet(workoutId, exerciseName, exerciseOrder) {

@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS = {
   lossRate: 0.5, // kg/tuần
   proteinPerKg: 2.0,
   weekPromptSeen: null,
+  programEdits: {}, // bài thêm/bỏ theo từng buổi, áp dụng cho các lần sau
   cycleStartAt: null, // mốc "bắt đầu lại chu kỳ từ D1" (ms); dữ liệu cũ giữ nguyên
 };
 

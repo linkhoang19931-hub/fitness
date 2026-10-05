@@ -13,7 +13,8 @@ export const TIMED = {
   'Mobility & Stretching': 'phút',
   Plank: 'giây',
 };
-export const unitOf = (name) => TIMED[name] || null;
+import { EXERCISE_BY_NAME } from './exercises';
+export const unitOf = (name) => EXERCISE_BY_NAME[name]?.unit || TIMED[name] || null;
 
 const E = (name, sets = 3) => ({ name, sets });
 const D = (muscle, focus, exercises) => ({ muscle, focus, exercises });
@@ -112,8 +113,38 @@ export const programById = (id) => PROGRAMS.find((p) => p.id === id) || PROGRAMS
 // Buổi tập cũ (trước khi có nhiều chương trình) thuộc chương trình nam 6 ngày
 export const programOfWorkout = (w) => programById(w?.programId || 'm6');
 
-export function dayOf(program, dayIndex) {
-  return program.list.find((d) => d.dayIndex === dayIndex) || program.list[0];
+// edits: { [programId]: { [dayIndex]: { add: [{ name, sets }], remove: [name] } } } — tuỳ chỉnh người dùng lưu lại
+export function dayOf(program, dayIndex, edits = null) {
+  const base = program.list.find((d) => d.dayIndex === dayIndex) || program.list[0];
+  const e = edits?.[program.id]?.[base.dayIndex];
+  if (!e) return base;
+  const removed = new Set(e.remove || []);
+  const kept = base.exercises.filter((x) => !removed.has(x.name));
+  const names = new Set(kept.map((x) => x.name));
+  const added = (e.add || []).filter((x) => !names.has(x.name) && !removed.has(x.name));
+  return { ...base, exercises: [...kept, ...added], edited: true };
+}
+
+// Trả về bản tuỳ chỉnh mới sau khi thêm/bỏ một bài khỏi buổi (không sửa trực tiếp object cũ)
+export function editDay(edits, programId, dayIndex, { add, remove, reset }) {
+  const all = { ...(edits || {}) };
+  const prog = { ...(all[programId] || {}) };
+  if (reset) {
+    delete prog[dayIndex];
+  } else {
+    const cur = { add: [...(prog[dayIndex]?.add || [])], remove: [...(prog[dayIndex]?.remove || [])] };
+    if (add) {
+      cur.remove = cur.remove.filter((n) => n !== add.name);
+      if (!cur.add.some((x) => x.name === add.name)) cur.add.push(add);
+    }
+    if (remove) {
+      cur.add = cur.add.filter((x) => x.name !== remove);
+      if (!cur.remove.includes(remove)) cur.remove.push(remove);
+    }
+    prog[dayIndex] = cur;
+  }
+  all[programId] = prog;
+  return all;
 }
 
 // Buổi kế tiếp = buổi ngay sau buổi đã hoàn thành gần nhất (theo vòng của chương trình)

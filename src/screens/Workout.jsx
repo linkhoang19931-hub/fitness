@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { DAY_COLORS, dayOf, getProgram, nextDayIndex, programOfWorkout, unitOf } from '../lib/program';
+import { DAY_COLORS, dayOf, editDay, getProgram, nextDayIndex, programOfWorkout, unitOf } from '../lib/program';
+import { MUSCLE_LABEL, dayGroups, groupsOf } from '../lib/exercises';
+import AddExercise, { exerciseInfo } from '../components/AddExercise';
+import { Switch } from '../components/ui';
 import { useRest, useSettings } from '../lib/store';
 import { addDays, fmtDate, fmtNum, fmtClock, fmtW, unlockAudio, weekStart } from '../lib/utils';
 import { useToday } from '../lib/useToday';
 import { useWakeLock } from '../lib/useWakeLock';
 import {
   activeWorkout,
+  addExerciseToWorkout,
   addSet,
+  removeExerciseFromWorkout,
   completedSince,
   lastActivityAt,
   changeWorkoutDay,
@@ -128,10 +133,16 @@ function Planner() {
   const [manual, setManual] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [guide, setGuide] = useState(null);
+  const [adding, setAdding] = useState(false);
   const suggested = nextDayIndex(last?.dayIndex, total);
   const dayIndex = manual && manual <= total ? manual : suggested;
-  const day = dayOf(program, dayIndex);
-  const prev = useLiveQuery(() => previousByExercise(day.exercises.map((e) => e.name)), [program.id, dayIndex]);
+  const programEdits = useSettings((s) => s.programEdits);
+  const updateSettings = useSettings((s) => s.update);
+  const day = dayOf(program, dayIndex, programEdits);
+  const dayNames = day.exercises.map((e) => e.name);
+  const prev = useLiveQuery(() => previousByExercise(dayNames), [program.id, dayIndex, dayNames.join('|')]);
+  const [editing, setEditing] = useState(false);
+  const saveEdit = (op) => updateSettings({ programEdits: editDay(programEdits, program.id, day.dayIndex, op) });
   useEffect(() => setManual(null), [program.id]);
   const [busy, setBusy] = useState(false);
   const color = DAY_COLORS[dayIndex];
@@ -195,8 +206,19 @@ function Planner() {
             const sets = prev?.byExercise?.[ex];
             const unit = unitOf(ex);
             return (
-              <li key={ex} className="hairline-b last:shadow-none">
-                <button className="w-full flex gap-3 py-2.5 text-left items-start" onClick={() => setGuide(ex)}>
+              <li key={ex} className="hairline-b last:shadow-none flex items-center gap-2">
+                {editing && (
+                  <button
+                    className="press h-7 w-7 shrink-0 rounded-full grid place-items-center text-white text-[18px] font-bold leading-none"
+                    style={{ background: 'var(--danger)' }}
+                    onClick={() => saveEdit({ remove: ex })}
+                    aria-label={`Bỏ ${ex}`}
+                    disabled={day.exercises.length <= 1}
+                  >
+                    −
+                  </button>
+                )}
+                <button className="flex-1 min-w-0 flex gap-3 py-2.5 text-left items-start" onClick={() => setGuide(ex)}>
                 <span className="w-5 shrink-0 text-muted font-rounded tnum font-semibold text-[15px] pt-px">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[16px] leading-snug">{ex}</div>
@@ -212,6 +234,32 @@ function Planner() {
             );
           })}
         </ol>
+        <div className="px-4 pt-1 flex items-center gap-1 -ml-2">
+          <Button variant="plain" className="text-[15px] px-2 !min-h-10" onClick={() => setAdding(true)}>
+            + Thêm bài
+          </Button>
+          <Button variant="plain" className="text-[15px] px-2 !min-h-10" onClick={() => setEditing(!editing)}>
+            {editing ? 'Xong' : 'Bỏ bài'}
+          </Button>
+          {day.edited && (
+            <Button variant="plain" className="text-[15px] px-2 !min-h-10 ml-auto !text-muted" onClick={() => saveEdit({ reset: true })}>
+              Về mặc định
+            </Button>
+          )}
+        </div>
+        <AddExercise
+          open={adding}
+          onClose={() => setAdding(false)}
+          title={`Thêm bài vào D${day.dayIndex} ${day.muscle}`}
+          groups={dayGroups(program.list.find((d) => d.dayIndex === day.dayIndex).exercises.map((e) => e.name))}
+          exclude={dayNames}
+          persistForced
+          persistLabel={`Bài sẽ có sẵn trong D${day.dayIndex} ${day.muscle} từ lần tập tới.`}
+          onAdd={(name, { sets }) => {
+            saveEdit({ add: { name, sets } });
+            setAdding(false);
+          }}
+        />
         <div className="p-4 pt-2">
           <Button
             variant={todayDone.length ? 'ghost' : 'primary'}
@@ -357,8 +405,44 @@ function GuideSheet({ name, onClose }) {
             Xem video mẫu trên YouTube
           </a>
         </div>
+      ) : exerciseInfo(name) ? (
+        <div className="pb-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-[14px] bg-surface p-3">
+              <div className="text-[12px] text-muted">Nhóm cơ</div>
+              <div className="text-[15px] font-semibold leading-snug">{groupsOf(name).map((x) => MUSCLE_LABEL[x]).join(', ')}</div>
+            </div>
+            <div className="rounded-[14px] bg-surface p-3">
+              <div className="text-[12px] text-muted">Dụng cụ</div>
+              <div className="text-[15px] font-semibold leading-snug">{exerciseInfo(name).equipment || '—'}</div>
+            </div>
+          </div>
+          <div className="mt-4 rounded-[16px] bg-surface p-4 text-[16px] leading-relaxed">
+            <div className="text-[13px] font-semibold uppercase text-muted mb-1">Điểm chính</div>
+            {exerciseInfo(name).tip}
+            <p className="text-[13px] text-muted mt-2">Gợi ý khi giảm mỡ: bài nhiều khớp 3–4 × 6–10, bài cô lập 3 × 10–15, nghỉ 60–120 giây.</p>
+          </div>
+          <a
+            href={videoUrl({ video: `${name} exercise form` })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="press mt-4 flex items-center justify-center gap-2 h-12 rounded-[14px] bg-surface text-accent font-semibold"
+          >
+            Xem video mẫu trên YouTube
+          </a>
+        </div>
       ) : (
-        <p className="text-muted">Chưa có hướng dẫn cho bài này.</p>
+        <div className="pb-2">
+          <p className="text-muted">Bài bạn tự thêm, chưa có hướng dẫn trong app.</p>
+          <a
+            href={videoUrl({ video: `${name} exercise form` })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="press mt-4 flex items-center justify-center gap-2 h-12 rounded-[14px] bg-surface text-accent font-semibold"
+          >
+            Tìm video “{name}” trên YouTube
+          </a>
+        </div>
       )}
     </Sheet>
   );
@@ -495,6 +579,7 @@ function ActiveSession({ workout }) {
   const day = dayOf(program, workout.dayIndex);
   const [sheet, setSheet] = useState(null); // 'finish' | 'switch' | 'discard'
   const [guide, setGuide] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const groups = useMemo(() => {
     const g = {};
@@ -523,6 +608,26 @@ function ActiveSession({ workout }) {
         />
       ))}
       <GuideSheet name={guide} onClose={() => setGuide(null)} />
+
+      <Button variant="ghost" className="w-full flex items-center justify-center gap-1.5" onClick={() => setAdding(true)}>
+        + Thêm bài vào buổi này
+      </Button>
+      <AddExercise
+        open={adding}
+        onClose={() => setAdding(false)}
+        title={`Thêm bài · ${day.muscle}`}
+        groups={dayGroups(program.list.find((d) => d.dayIndex === workout.dayIndex)?.exercises.map((e) => e.name) || groups.map(([n]) => n))}
+        exclude={groups.map(([n]) => n)}
+        persistLabel={`Giữ bài này trong D${workout.dayIndex} cho các lần sau`}
+        onAdd={async (name, { sets, persist }) => {
+          await addExerciseToWorkout(workout.id, name, sets);
+          if (persist) {
+            const st = useSettings.getState();
+            st.update({ programEdits: editDay(st.programEdits, program.id, workout.dayIndex, { add: { name, sets } }) });
+          }
+          setAdding(false);
+        }}
+      />
 
       <div className="grid grid-cols-2 gap-2 pt-1">
         <Button variant="ghost" onClick={() => setSheet('switch')}>
@@ -651,6 +756,8 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
   const startRest = useRest((s) => s.start);
   const [note, setNote] = useState(workout.notes?.[name] || '');
   const allDone = sets.every((s) => s.isCompleted);
+  const [removing, setRemoving] = useState(false);
+  const [removeForever, setRemoveForever] = useState(false);
   const unit = unitOf(name); // bài tính theo thời gian (phút/giây) thì không có ô kg
   const doneCount = sets.filter((s) => s.isCompleted).length;
 
@@ -751,7 +858,34 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
         <Button variant="plain" className="text-[15px] px-3 disabled:bg-transparent" disabled={sets.length <= 1} onClick={() => removeLastSet(workout.id, name)}>
           Bớt set
         </Button>
+        <Button variant="plain" className="text-[15px] px-3 ml-auto !text-danger" onClick={() => setRemoving(true)}>
+          Bỏ bài
+        </Button>
       </div>
+      <Sheet open={removing} onClose={() => setRemoving(false)} title="Bỏ bài này?">
+        <p className="text-[15px] text-muted mb-3">
+          {name}
+          {doneCount > 0 ? ` — ${doneCount} set đã tick của bài này trong buổi hôm nay cũng sẽ bị xoá.` : ''}
+        </p>
+        <div className="rounded-[16px] bg-surface px-4 py-2.5 flex items-center justify-between gap-3 mb-3">
+          <span className="text-[15px]">Bỏ luôn ở các lần sau (D{workout.dayIndex})</span>
+          <Switch checked={removeForever} onChange={setRemoveForever} label="Bỏ luôn ở các lần sau" />
+        </div>
+        <Button
+          variant="danger"
+          className="w-full"
+          onClick={async () => {
+            await removeExerciseFromWorkout(workout.id, name);
+            if (removeForever) {
+              const st = useSettings.getState();
+              st.update({ programEdits: editDay(st.programEdits, programOfWorkout(workout).id, workout.dayIndex, { remove: name }) });
+            }
+            setRemoving(false);
+          }}
+        >
+          Bỏ bài khỏi buổi
+        </Button>
+      </Sheet>
       <input
         type="text"
         value={note}

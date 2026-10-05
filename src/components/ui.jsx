@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { parseNum } from '../lib/utils';
 
 // Thẻ nhóm kiểu "inset grouped" của iOS: nền phẳng, bo 16px, không viền
@@ -90,15 +90,16 @@ export function NumField({ value, onCommit, decimal = true, placeholder, classNa
   );
 }
 
-export function TextField({ className = '', ...rest }) {
+export const TextField = forwardRef(function TextField({ className = '', ...rest }, ref) {
   return (
     <input
+      ref={ref}
       type="text"
       className={`h-12 w-full rounded-[12px] bg-surface-2 outline-none px-3.5 placeholder:text-faint focus:ring-2 focus:ring-accent ${className}`}
       {...rest}
     />
   );
-}
+});
 
 // Thanh tiến trình mảnh kiểu iOS
 export function MacroBar({ label, value, target, min, unit = 'g', over = false, hint, color = 'var(--accent)' }) {

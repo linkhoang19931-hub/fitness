@@ -75,6 +75,8 @@ Hệ số vận động tính từ công việc hằng ngày × số buổi tậ
 
 ## Tập luyện
 
+- **Thêm / bỏ bài**: kho 149 bài (`src/lib/exercises.js`) gắn nhóm cơ, dụng cụ, mẹo. "+ Thêm bài" mở bảng tìm: gõ tới đâu gợi ý tới đó (không cần dấu, gõ tắt như "inc", "cable cr"), mặc định lọc theo nhóm cơ của buổi, có thể chọn nhóm khác hoặc tự đặt tên bài mới. Thêm/bỏ ở màn lên lịch thì áp dụng cho các lần sau; trong buổi đang tập thì tuỳ chọn có giữ cho lần sau hay không. "Về mặc định" khôi phục buổi gốc.
+
 - Xong buổi trong ngày: thẻ "Đã xong buổi tập hôm nay" có dấu tick, dải Tuần này đánh dấu ngày đã tập.
 - Chạm tên bài (biểu tượng ⓘ) để xem hướng dẫn: nhóm cơ, set × rep gợi ý, chuẩn bị, các bước, lỗi hay gặp, link video mẫu. Nội dung ở `src/lib/guides.js`.
 - "Bắt đầu lại từ D1" đặt lại chu kỳ mà không xoá dữ liệu; sang tuần mới với chu kỳ dở dang, app hỏi lại từ D1 hay đi tiếp.
