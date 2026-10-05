@@ -4,7 +4,8 @@ import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer,
 import { db } from '../lib/db';
 import { compressPhoto } from '../lib/image';
 import { useSettings } from '../lib/store';
-import { addDays, fmtDate, fmtNum, fmtShort, movingAverage7, todayStr } from '../lib/utils';
+import { addDays, fmtDate, fmtNum, fmtShort, movingAverage7 } from '../lib/utils';
+import { useToday } from '../lib/useToday';
 import { Button, Card, GroupLabel, NumField, Rings, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
 import { IconCamera, IconTrash } from '../components/Icons';
 
@@ -23,7 +24,7 @@ export default function Body() {
 function WeightCard({ showToast }) {
   const { startWeight, goalWeight } = useSettings();
   const all = useLiveQuery(() => db.bodyMetrics.orderBy('date').toArray(), []) || [];
-  const today = todayStr();
+  const today = useToday();
   const todayEntry = all.find((e) => e.date === today);
   const [input, setInput] = useState(null);
   const [range, setRange] = useState('30');
@@ -219,7 +220,7 @@ function PhotoSection({ showToast }) {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState(null);
   const [compare, setCompare] = useState(false);
-  const today = todayStr();
+  const today = useToday();
   const hasToday = photos.some((p) => p.date === today);
 
   const onFile = async (e) => {

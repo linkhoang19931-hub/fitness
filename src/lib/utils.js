@@ -86,3 +86,14 @@ export const fmtClock = (sec) => {
   const s = Math.max(0, Math.ceil(sec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
+
+// Thứ hai đầu tuần của một ngày (tuần tính từ Thứ hai đến Chủ nhật)
+export function weekStart(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const back = (dt.getDay() + 6) % 7; // T2 → 0, CN → 6
+  return toDateStr(new Date(y, m - 1, d - back));
+}
+
+// Hiển thị mức tạ: 0 hoặc trống = tập bằng trọng lượng cơ thể (BW)
+export const fmtW = (w) => (w ? fmtNum(w) : 'BW');

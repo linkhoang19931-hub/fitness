@@ -3,7 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, kcalOf } from '../lib/db';
 import { useSettings } from '../lib/store';
 import { useTargets } from '../lib/targets';
-import { addDays, fmtDate, fmtNum, todayStr } from '../lib/utils';
+import { addDays, fmtDate, fmtNum } from '../lib/utils';
+import { useToday } from '../lib/useToday';
 import { Button, Card, GroupLabel, MacroBar, NumField, Rings, Segmented, Sheet, TextField, useToast } from '../components/ui';
 import { FOOD_GROUPS, FOODS, SRC_LABEL, normalize, searchFoods } from '../lib/foods';
 import { MEAL_PLANS, itemEntry, kcalOfTotals, planTotals, scalePlan, totals } from '../lib/mealplans';
@@ -13,7 +14,11 @@ const COLORS = { protein: 'var(--protein)', fat: 'var(--fat)', carbs: 'var(--car
 
 export default function Nutrition() {
   const t = useTargets();
-  const [date, setDate] = useState(todayStr());
+  // Mặc định luôn là "hôm nay" (tự chuyển khi qua nửa đêm); chọn ngày khác thì giữ ngày đó
+  const today = useToday();
+  const [picked, setPicked] = useState(null);
+  const date = picked ?? today;
+  const setDate = (d) => setPicked(d >= today ? null : d);
   const [toast, showToast] = useToast();
   const [guide, setGuide] = useState(false);
   const logs = useLiveQuery(() => db.nutritionLogs.where('date').equals(date).sortBy('createdAt'), [date]) || [];
@@ -23,7 +28,7 @@ export default function Nutrition() {
     (a, l) => ({ p: a.p + (+l.protein || 0), f: a.f + (+l.fat || 0), c: a.c + (+l.carbs || 0), k: a.k + (+l.calories || 0) }),
     { p: 0, f: 0, c: 0, k: 0 }
   );
-  const isToday = date === todayStr();
+  const isToday = date === today;
 
   const addEntry = async ({ name, protein, fat, carbs }) => {
     await db.nutritionLogs.add({

@@ -3,9 +3,16 @@ import { DEFAULT_SETS, dayOf } from './program';
 import { todayStr } from './utils';
 
 // Buổi đã hoàn thành gần nhất (để suy ra nhóm cơ kế tiếp)
-export async function lastCompletedWorkout() {
+// sinceTs: chỉ tính các buổi hoàn thành sau mốc "bắt đầu lại chu kỳ"
+export async function lastCompletedWorkout(sinceTs = null) {
   const all = await db.workouts.toArray();
-  return all.filter((w) => w.completedAt).sort((a, b) => b.completedAt - a.completedAt)[0] || null;
+  return all.filter((w) => w.completedAt && (!sinceTs || w.completedAt > sinceTs)).sort((a, b) => b.completedAt - a.completedAt)[0] || null;
+}
+
+// Các buổi đã hoàn thành từ ngày `fromDate` (YYYY-MM-DD) trở đi
+export async function completedSince(fromDate) {
+  const all = await db.workouts.where('date').aboveOrEqual(fromDate).toArray();
+  return all.filter((w) => w.completedAt).sort((a, b) => a.completedAt - b.completedAt);
 }
 
 export async function activeWorkout() {
@@ -78,7 +85,7 @@ export async function completeSet(log, fallback, allSetsOfExercise) {
   const weightKg = log.weightKg ?? fallback?.weightKg ?? null;
   const reps = log.reps ?? fallback?.reps ?? null;
   await db.transaction('rw', db.exerciseLogs, async () => {
-    await db.exerciseLogs.update(log.id, { isCompleted: 1, weightKg, reps });
+    await db.exerciseLogs.update(log.id, { isCompleted: 1, weightKg, reps, completedAt: Date.now() });
     const next = allSetsOfExercise.find((s) => s.setIndex === log.setIndex + 1);
     if (next && !next.isCompleted) {
       const patch = {};
@@ -89,8 +96,27 @@ export async function completeSet(log, fallback, allSetsOfExercise) {
   });
 }
 
-export async function finishWorkout(id) {
-  await db.workouts.update(id, { completedAt: Date.now() });
+// Kết thúc buổi. Buổi không có set nào được tick thì xoá luôn (không tính vào chu kỳ).
+// at: thời điểm kết thúc (dùng khi chốt hộ một buổi quên bấm kết thúc).
+export async function finishWorkout(id, at = Date.now()) {
+  const done = await db.exerciseLogs.where('workoutId').equals(id).filter((l) => !!l.isCompleted).count();
+  if (done === 0) {
+    await discardWorkout(id);
+    return false;
+  }
+  await db.transaction('rw', db.workouts, db.exerciseLogs, async () => {
+    await db.workouts.update(id, { completedAt: at });
+    // set chưa tick thì bỏ, lịch sử chỉ giữ set thật sự đã tập
+    await db.exerciseLogs.where('workoutId').equals(id).filter((l) => !l.isCompleted).delete();
+  });
+  return true;
+}
+
+// Thời điểm của set cuối cùng được ghi (để chốt buổi quên kết thúc cho đúng thời lượng)
+export async function lastActivityAt(workout) {
+  const logs = await db.exerciseLogs.where('workoutId').equals(workout.id).toArray();
+  const ts = logs.map((l) => l.completedAt || 0).filter(Boolean);
+  return ts.length ? Math.max(...ts) : workout.startedAt + 50 * 60000;
 }
 
 export async function discardWorkout(id) {

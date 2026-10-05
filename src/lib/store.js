@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export const DEFAULT_SETTINGS = {
   theme: 'dark',
@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   autoTargets: true,
   lossRate: 0.5, // kg/tuần
   proteinPerKg: 2.0,
+  weekPromptSeen: null,
+  cycleStartAt: null, // mốc "bắt đầu lại chu kỳ từ D1" (ms); dữ liệu cũ giữ nguyên
 };
 
 // Cấu hình người dùng — lưu LocalStorage qua Zustand persist (URD 2.1)
@@ -28,6 +30,7 @@ export const useSettings = create(
     (set) => ({
       ...DEFAULT_SETTINGS,
       update: (patch) => set(patch),
+      resetCycle: () => set({ cycleStartAt: Date.now() }),
       resetSettings: () => set(DEFAULT_SETTINGS),
     }),
     { name: 'shuru-settings', version: 1 }
@@ -48,8 +51,33 @@ const KCAL_PER_KG = 7700; // năng lượng ước tính trong 1 kg mỡ cơ th�
 //  Chế độ tự động: TDEE (Mifflin–St Jeor theo cân hiện tại) − thâm hụt theo tốc độ giảm mong muốn;
 //  Protein = g/kg × cân hiện tại (±0,2 g/kg); Fat = trần do người dùng đặt; Carbs = phần Kcal còn lại.
 //  Chế độ thủ công: dùng Kcal duy trì, thâm hụt và Protein nhập tay.
-export function macroTargets(s, currentWeight) {
-  const W = currentWeight || s.startWeight;
+// Giới hạn giá trị nhập để không bao giờ ra số âm / vô lý
+const clamp = (v, lo, hi, d) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.min(hi, Math.max(lo, n)) : d;
+};
+export function sanitize(raw) {
+  const s = { ...DEFAULT_SETTINGS, ...raw };
+  return {
+    ...s,
+    startWeight: clamp(s.startWeight, 30, 300, 81),
+    goalWeight: clamp(s.goalWeight, 30, 300, 70),
+    age: s.age ? clamp(s.age, 12, 100, null) : null,
+    heightCm: s.heightCm ? clamp(s.heightCm, 120, 230, null) : null,
+    activity: clamp(s.activity, 1.1, 2, 1.55),
+    lossRate: clamp(s.lossRate, 0.1, 1.5, 0.5),
+    proteinPerKg: clamp(s.proteinPerKg, 1, 3.5, 2),
+    fatCap: clamp(s.fatCap, 10, 200, 30),
+    maintenanceKcal: clamp(s.maintenanceKcal, 1000, 6000, 2400),
+    deficitKcal: Number.isFinite(+s.deficitKcal) ? Math.min(1500, Math.max(0, +s.deficitKcal)) : 500,
+    proteinMin: clamp(s.proteinMin, 20, 400, 140),
+    proteinMax: clamp(Math.max(+s.proteinMax || 0, +s.proteinMin || 0), 20, 400, 160),
+  };
+}
+
+export function macroTargets(raw, currentWeight) {
+  const s = sanitize(raw);
+  const W = currentWeight > 0 ? currentWeight : s.startWeight;
   const prof = calcTDEE({ sex: s.sex, age: s.age, heightCm: s.heightCm, weightKg: W, activity: s.activity });
   let tdee, deficit, proteinMin, proteinMax, floorHit = false, atGoal = false;
   if (s.autoTargets) {
@@ -108,8 +136,8 @@ export const ACTIVITY_LEVELS = [
   { value: 1.725, label: 'Nhiều', hint: 'Tập nặng 6–7 buổi/tuần hoặc việc chân tay' },
 ];
 
-// Trạng thái phiên (không lưu): bộ đếm nghỉ
-export const useRest = create((set) => ({
+// Bộ đếm nghỉ — lưu sessionStorage để tải lại trang (cập nhật app) vẫn còn
+export const useRest = create(persist((set) => ({
   endAt: null,
   total: 0,
   start: (seconds) => set({ endAt: Date.now() + seconds * 1000, total: seconds }),
@@ -120,4 +148,4 @@ export const useRest = create((set) => ({
       return { endAt, total: Math.max(st.total + delta, 1) };
     }),
   stop: () => set({ endAt: null, total: 0 }),
-}));
+}), { name: 'rest-timer', storage: createJSONStorage(() => sessionStorage) }));

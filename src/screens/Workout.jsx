@@ -3,11 +3,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { DAY_COLORS, PROGRAM, dayOf, nextDayIndex } from '../lib/program';
 import { useRest, useSettings } from '../lib/store';
-import { fmtDate, fmtNum, fmtClock, unlockAudio } from '../lib/utils';
+import { addDays, fmtDate, fmtNum, fmtClock, fmtW, unlockAudio, weekStart } from '../lib/utils';
+import { useToday } from '../lib/useToday';
 import { useWakeLock } from '../lib/useWakeLock';
 import {
   activeWorkout,
   addSet,
+  completedSince,
+  lastActivityAt,
   changeWorkoutDay,
   completeSet,
   discardWorkout,
@@ -22,10 +25,72 @@ import { IconCheck, IconChevron, IconDumbbell, IconTimer } from '../components/I
 
 const SESSION_MIN = 50;
 
+const STALE_HOURS = 4;
+
 export default function Workout() {
   const active = useLiveQuery(() => activeWorkout(), []);
+  const today = useToday();
   if (active === undefined) return null;
-  return active ? <ActiveSession workout={active} /> : <Planner />;
+  if (!active) return <Planner />;
+  // Buổi bắt đầu từ hơn 4 giờ trước hoặc từ hôm trước mà chưa bấm kết thúc
+  const stale = Date.now() - active.startedAt > STALE_HOURS * 3600000 || active.date !== today;
+  return stale ? <StaleSession workout={active} today={today} /> : <ActiveSession workout={active} />;
+}
+
+/* ---------- Buổi tập quên bấm kết thúc ---------- */
+function StaleSession({ workout, today }) {
+  const done = useLiveQuery(() => db.exerciseLogs.where('workoutId').equals(workout.id).filter((l) => !!l.isCompleted).count(), [workout.id]);
+  const day = dayOf(workout.dayIndex);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    useRest.getState().stop();
+    await finishWorkout(workout.id, await lastActivityAt(workout));
+    setBusy(false);
+  };
+  return (
+    <Card>
+      <div className="flex items-center gap-3.5">
+        <DayBadge dayIndex={workout.dayIndex} size={52} />
+        <div>
+          <div className="text-[13px] font-semibold" style={{ color: 'var(--warn)' }}>
+            Buổi tập chưa kết thúc
+          </div>
+          <div className="text-[20px] font-bold leading-tight">
+            {day.muscle} · {fmtDate(workout.date)}
+          </div>
+        </div>
+      </div>
+      <p className="text-[15px] text-muted mt-3">
+        {done
+          ? `Buổi này có ${done} set đã tick nhưng chưa được lưu. Lưu lại để chu kỳ chuyển sang nhóm cơ kế tiếp.`
+          : 'Buổi này chưa có set nào được tick nên sẽ không được lưu.'}
+      </p>
+      <div className="space-y-2 mt-4">
+        {done > 0 && (
+          <Button variant="primary" className="w-full" style={{ background: 'var(--go)' }} disabled={busy} onClick={save}>
+            Lưu buổi {fmtDate(workout.date)}
+          </Button>
+        )}
+        {done > 0 && workout.date === today && (
+          <Button variant="ghost" className="w-full" onClick={() => db.workouts.update(workout.id, { startedAt: Date.now() })}>
+            Tập tiếp buổi này
+          </Button>
+        )}
+        <Button
+          variant="destructive"
+          className="w-full"
+          disabled={busy}
+          onClick={async () => {
+            useRest.getState().stop();
+            await discardWorkout(workout.id);
+          }}
+        >
+          {done ? 'Bỏ buổi này' : 'Đóng buổi trống'}
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 // Ô vuông màu nhận diện ngày tập
@@ -48,14 +113,28 @@ function DayBadge({ dayIndex, size = 44 }) {
 
 /* ---------------- Màn hình chọn buổi (chưa tập) ---------------- */
 function Planner() {
-  const last = useLiveQuery(() => lastCompletedWorkout(), []);
+  const cycleStartAt = useSettings((s) => s.cycleStartAt);
+  const resetCycle = useSettings((s) => s.resetCycle);
+  const today = useToday();
+  const monday = weekStart(today);
+  const last = useLiveQuery(() => lastCompletedWorkout(cycleStartAt), [cycleStartAt]);
+  const lastAny = useLiveQuery(() => lastCompletedWorkout(), []);
+  const week = useLiveQuery(() => completedSince(monday), [monday]) || [];
   const [manual, setManual] = useState(null);
+  const [resetOpen, setResetOpen] = useState(false);
   const suggested = nextDayIndex(last?.dayIndex);
   const dayIndex = manual ?? suggested;
   const day = dayOf(dayIndex);
   const prev = useLiveQuery(() => previousSession(dayIndex), [dayIndex]);
   const [busy, setBusy] = useState(false);
   const color = DAY_COLORS[dayIndex];
+
+  // Gợi ý bắt đầu lại từ D1 khi sang tuần mới mà chu kỳ trước dở dang
+  const mondayTs = new Date(monday + 'T00:00:00').getTime();
+  const weekPromptSeen = useSettings((s) => s.weekPromptSeen);
+  const newWeekPrompt =
+    weekPromptSeen !== monday &&
+    suggested !== 1 && week.length === 0 && lastAny && lastAny.completedAt < mondayTs && (!cycleStartAt || cycleStartAt < mondayTs);
 
   const start = async () => {
     unlockAudio(); // mở khoá âm thanh trên iOS bằng chính thao tác chạm này
@@ -64,8 +143,30 @@ function Planner() {
     setBusy(false);
   };
 
+  const doReset = () => {
+    resetCycle();
+    setManual(null);
+    setResetOpen(false);
+  };
+
   return (
     <div>
+      {newWeekPrompt && (
+        <Card className="mb-3">
+          <div className="text-[17px] font-semibold">Tuần mới bắt đầu</div>
+          <p className="text-[15px] text-muted mt-1">
+            Tuần trước bạn dừng ở D{last?.dayIndex ?? '–'} {last ? dayOf(last.dayIndex).muscle : ''}. Muốn tập lại từ D1 Ngực hay đi tiếp D{suggested} {dayOf(suggested).muscle}?
+          </p>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <Button variant="primary" onClick={doReset}>
+              Lại từ D1
+            </Button>
+            <Button variant="ghost" onClick={() => useSettings.getState().update({ weekPromptSeen: monday })}>
+              Đi tiếp D{suggested}
+            </Button>
+          </div>
+        </Card>
+      )}
       <Card className="overflow-hidden !p-0">
         <div className="p-4 pb-3" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 16%, transparent), transparent)` }}>
           <div className="flex items-center gap-3.5">
@@ -88,7 +189,7 @@ function Planner() {
                 <div className="min-w-0">
                   <div className="text-[16px] leading-snug">{ex}</div>
                   {sets?.length > 0 && (
-                    <div className="text-[13px] text-muted font-rounded tnum truncate">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
+                    <div className="text-[13px] text-muted font-rounded tnum truncate">{sets.map((s) => `${fmtW(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
                   )}
                 </div>
               </li>
@@ -104,7 +205,20 @@ function Planner() {
         </div>
       </Card>
 
-      <GroupLabel>Chu kỳ 6 ngày</GroupLabel>
+      <GroupLabel>Tuần này · {week.length} buổi</GroupLabel>
+      <WeekStrip monday={monday} today={today} week={week} />
+
+      <GroupLabel
+        right={
+          suggested !== 1 && (
+            <button className="text-[15px] text-accent font-medium" onClick={() => setResetOpen(true)}>
+              Bắt đầu lại từ D1
+            </button>
+          )
+        }
+      >
+        Chu kỳ 6 ngày
+      </GroupLabel>
       <Card className="!p-2">
         <div className="grid grid-cols-3 gap-1.5">
           {PROGRAM.map((d) => {
@@ -117,16 +231,59 @@ function Planner() {
               >
                 <DayBadge dayIndex={d.dayIndex} size={38} />
                 <span className="text-[13px] font-semibold leading-tight">{d.muscle}</span>
-                <span className="text-[11px] text-muted -mt-1 h-3.5">{d.dayIndex === suggested ? 'gợi ý' : ''}</span>
+                <span className="text-[11px] text-muted -mt-1 h-3.5">{d.dayIndex === suggested ? 'tiếp theo' : ''}</span>
               </button>
             );
           })}
         </div>
       </Card>
-      <p className="px-4 pt-2 text-[13px] text-muted">Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần. Nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp.</p>
+      <p className="px-4 pt-2 text-[13px] text-muted">
+        Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần: nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp. Chạm một nhóm cơ khác để tập buổi đó hôm nay; buổi sau sẽ nối tiếp từ nhóm cơ bạn vừa tập.
+      </p>
+
+      <Sheet open={resetOpen} onClose={() => setResetOpen(false)} title="Bắt đầu lại từ D1?">
+        <p className="text-[15px] text-muted mb-4">
+          Buổi tiếp theo sẽ là D1 Ngực. Lịch sử tập, số liệu buổi trước, cân nặng, dinh dưỡng và ảnh đều giữ nguyên; số tạ lần trước của từng bài vẫn hiện như cũ.
+        </p>
+        <Button variant="primary" className="w-full" onClick={doReset}>
+          Bắt đầu lại từ D1
+        </Button>
+      </Sheet>
 
       <History />
     </div>
+  );
+}
+
+const WD_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+// 7 ô Thứ hai → Chủ nhật, ô nào có buổi tập thì hiện huy hiệu ngày tập
+function WeekStrip({ monday, today, week }) {
+  return (
+    <Card className="!p-3">
+      <div className="grid grid-cols-7 gap-1">
+        {WD_SHORT.map((label, i) => {
+          const date = addDays(monday, i);
+          const sessions = week.filter((w) => w.date === date);
+          const isToday = date === today;
+          return (
+            <div key={label} className="flex flex-col items-center gap-1.5">
+              <span className={`text-[12px] font-semibold ${isToday ? 'text-accent' : 'text-muted'}`}>{label}</span>
+              {sessions.length ? (
+                <DayBadge dayIndex={sessions[sessions.length - 1].dayIndex} size={34} />
+              ) : (
+                <span
+                  className="h-[34px] w-[34px] rounded-[10px] grid place-items-center text-[13px] font-rounded tnum text-faint"
+                  style={{ background: 'var(--surface-2)', outline: isToday ? '2px solid var(--accent)' : 'none', outlineOffset: 2 }}
+                >
+                  {Number(date.slice(8))}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
@@ -172,7 +329,7 @@ function History() {
                     {Object.entries(grouped).map(([name, sets]) => (
                       <div key={name}>
                         <div className="text-muted text-[13px]">{name}</div>
-                        <div className="font-rounded tnum">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
+                        <div className="font-rounded tnum">{sets.map((s) => `${fmtW(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
                         {w.notes?.[name] && <div className="text-[13px] text-muted italic">{w.notes[name]}</div>}
                       </div>
                     ))}
@@ -261,20 +418,20 @@ function ActiveSession({ workout }) {
               {done}
               <span className="text-muted text-[20px]">/{total}</span>
             </div>
-            <div className="text-[13px] text-muted mt-1">set đã hoàn thành. Set chưa tick sẽ không vào lịch sử.</div>
+            <div className="text-[13px] text-muted mt-1">{done ? 'set đã hoàn thành. Set chưa tick sẽ bị bỏ.' : 'Chưa có set nào; buổi này sẽ không tính vào chu kỳ.'}</div>
           </div>
         </div>
         <div className="space-y-2">
           <Button
             variant="primary"
             className="w-full h-[52px]"
-            style={{ background: 'var(--go)' }}
+            style={{ background: done ? 'var(--go)' : undefined }}
             onClick={async () => {
               useRest.getState().stop();
               await finishWorkout(workout.id);
             }}
           >
-            Lưu & kết thúc
+            {done ? 'Lưu & kết thúc' : 'Thoát (chưa tập set nào, không lưu)'}
           </Button>
           <Button variant="ghost" className="w-full" onClick={() => setSheet(null)}>
             Tập tiếp
@@ -373,10 +530,16 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
   const allDone = sets.every((s) => s.isCompleted);
   const doneCount = sets.filter((s) => s.isCompleted).length;
 
-  const saveNote = async () => {
+  const saveNote = async (text = note) => {
     const w = await db.workouts.get(workout.id);
-    await db.workouts.update(workout.id, { notes: { ...(w?.notes || {}), [name]: note.trim() } });
+    if (w) await db.workouts.update(workout.id, { notes: { ...(w.notes || {}), [name]: text.trim() } });
   };
+  // Tự lưu ghi chú 0,6 giây sau khi ngừng gõ (không mất chữ nếu app bị tải lại)
+  useEffect(() => {
+    if (note === (workout.notes?.[name] || '')) return;
+    const t = setTimeout(() => saveNote(note), 600);
+    return () => clearTimeout(t);
+  }, [note]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async (s, i) => {
     if (s.isCompleted) {
@@ -403,7 +566,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
         </span>
       </div>
       <p className="text-[13px] text-muted font-rounded tnum mb-3 pl-9">
-        {prevSets.length ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ')}` : 'Chưa có dữ liệu buổi trước'}
+        {prevSets.length ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => `${fmtW(s.weightKg)}×${s.reps ?? '–'}`).join('  ')}` : 'Chưa có dữ liệu buổi trước'}
       </p>
 
       <div className="grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center text-[12px] font-medium text-muted mb-1 px-0.5">
@@ -423,7 +586,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
               </span>
               <NumField
                 value={s.weightKg}
-                placeholder={ref ? fmtNum(ref.weightKg) : 'kg'}
+                placeholder={ref ? fmtW(ref.weightKg) : 'kg'}
                 onCommit={(v) => db.exerciseLogs.update(s.id, { weightKg: v })}
                 aria-label={`Tạ set ${s.setIndex}`}
               />
@@ -460,7 +623,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
         type="text"
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        onBlur={saveNote}
+        onBlur={() => saveNote()}
         placeholder="Ghi chú (vd: ghế dốc nấc 3, form siết tốt)"
         className="h-11 w-full rounded-[12px] bg-surface-2 px-3.5 text-[15px] outline-none focus:ring-2 focus:ring-accent placeholder:text-faint"
       />
