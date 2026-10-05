@@ -17,6 +17,9 @@ export const DEFAULT_SETTINGS = {
   age: null,
   heightCm: null,
   activity: 1.55,
+  autoTargets: true,
+  lossRate: 0.5, // kg/tuần
+  proteinPerKg: 2.0,
 };
 
 // Cấu hình người dùng — lưu LocalStorage qua Zustand persist (URD 2.1)
@@ -33,13 +36,62 @@ export const useSettings = create(
 
 export const pickSettings = (s) => Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map((k) => [k, s[k]]));
 
-// Mục tiêu dinh dưỡng suy ra từ cấu hình:
-//  Kcal mục tiêu = Kcal duy trì − mức thâm hụt
-//  Carbs = phần Kcal còn lại sau Protein (mức trên) và Fat (trần) / 4
-export function macroTargets(s) {
-  const kcal = Math.max(0, s.maintenanceKcal - s.deficitKcal);
-  const carbs = Math.max(0, Math.round((kcal - s.proteinMax * 4 - s.fatCap * 9) / 4));
-  return { kcal, carbs, proteinMin: s.proteinMin, proteinMax: s.proteinMax, fatCap: s.fatCap };
+export const LOSS_RATES = [
+  { value: 0.25, label: '0,25', hint: 'Nhẹ nhàng' },
+  { value: 0.5, label: '0,5', hint: 'Khuyến nghị' },
+  { value: 0.75, label: '0,75', hint: 'Nhanh' },
+  { value: 1, label: '1,0', hint: 'Rất nhanh' },
+];
+const KCAL_PER_KG = 7700; // năng lượng ước tính trong 1 kg mỡ cơ thể
+
+// Mục tiêu dinh dưỡng mỗi ngày.
+//  Chế độ tự động: TDEE (Mifflin–St Jeor theo cân hiện tại) − thâm hụt theo tốc độ giảm mong muốn;
+//  Protein = g/kg × cân hiện tại (±0,2 g/kg); Fat = trần do người dùng đặt; Carbs = phần Kcal còn lại.
+//  Chế độ thủ công: dùng Kcal duy trì, thâm hụt và Protein nhập tay.
+export function macroTargets(s, currentWeight) {
+  const W = currentWeight || s.startWeight;
+  const prof = calcTDEE({ sex: s.sex, age: s.age, heightCm: s.heightCm, weightKg: W, activity: s.activity });
+  let tdee, deficit, proteinMin, proteinMax, floorHit = false, atGoal = false;
+  if (s.autoTargets) {
+    tdee = prof?.tdee ?? s.maintenanceKcal;
+    atGoal = W <= s.goalWeight;
+    deficit = atGoal ? 0 : Math.round((s.lossRate * KCAL_PER_KG) / 7 / 10) * 10;
+    const floor = Math.max(s.sex === 'female' ? 1200 : 1500, prof?.bmr ?? 0);
+    if (tdee - deficit < floor) {
+      deficit = Math.max(0, tdee - floor);
+      floorHit = true;
+    }
+    proteinMin = Math.round(W * (s.proteinPerKg - 0.2));
+    proteinMax = Math.round(W * (s.proteinPerKg + 0.2));
+  } else {
+    tdee = s.maintenanceKcal;
+    deficit = s.deficitKcal;
+    proteinMin = s.proteinMin;
+    proteinMax = s.proteinMax;
+  }
+  const kcal = Math.max(0, tdee - deficit);
+  const proteinMid = Math.round((proteinMin + proteinMax) / 2);
+  const carbs = Math.max(0, Math.round((kcal - proteinMid * 4 - s.fatCap * 9) / 4));
+  const weeklyLoss = (deficit * 7) / KCAL_PER_KG;
+  const toGo = Math.max(0, W - s.goalWeight);
+  const weeks = weeklyLoss > 0 ? toGo / weeklyLoss : null;
+  return {
+    kcal,
+    carbs,
+    proteinMin,
+    proteinMax,
+    proteinMid,
+    fatCap: s.fatCap,
+    tdee,
+    deficit,
+    weight: W,
+    tdeeFromProfile: !!(s.autoTargets && prof),
+    bmr: prof?.bmr ?? null,
+    weeklyLoss,
+    weeks,
+    floorHit,
+    atGoal,
+  };
 }
 
 // TDEE theo công thức Mifflin–St Jeor × hệ số vận động

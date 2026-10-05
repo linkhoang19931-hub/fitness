@@ -59,6 +59,9 @@ export const PROGRAM = [
   },
 ];
 
+// Màu nhận diện từng ngày (bảng màu hệ thống iOS)
+export const DAY_COLORS = { 1: '#ff375f', 2: '#0a84ff', 3: '#30d158', 4: '#ff9f0a', 5: '#bf5af2', 6: '#40c8e0' };
+
 export const dayOf = (dayIndex) => PROGRAM.find((d) => d.dayIndex === dayIndex) || PROGRAM[0];
 
 // Buổi kế tiếp = nhóm cơ ngay sau buổi đã hoàn thành gần nhất (không phụ thuộc thứ trong tuần,

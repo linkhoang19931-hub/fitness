@@ -3,23 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-    <meta name="theme-color" content="#0e0e10" />
+    <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Linh's Fitness" />
+    <meta name="apple-mobile-web-app-title" content="Baki Goal" />
     <link rel="icon" type="image/png" href="./favicon.png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-    <title>Linh's Fitness Tracker</title>
+    <title>Baki Goal</title>
     <script>
       // Áp theme trước khi React render để tránh nháy màn hình trắng
       try {
         var s = JSON.parse(localStorage.getItem('shuru-settings') || '{}');
-        if (s.state && s.state.theme === 'light') document.documentElement.classList.remove('dark');
+        var t = (s.state && s.state.theme) || 'dark';
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (!dark) document.documentElement.classList.remove('dark');
       } catch (e) {}
     </script>
-    <script type="module" crossorigin src="./assets/index-BVEgK1Tb.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D1dptJhW.css">
+    <script type="module" crossorigin src="./assets/index-RqCYu0lz.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DMTE8ohn.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <div id="root"></div>

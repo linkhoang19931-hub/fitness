@@ -1,22 +1,39 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from './lib/store';
-import { fmtDate, todayStr } from './lib/utils';
 import Workout from './screens/Workout';
 import Nutrition from './screens/Nutrition';
 import Body from './screens/Body';
 import Settings from './screens/Settings';
 import RestTimer from './components/RestTimer';
-import { IconBowl, IconDumbbell, IconGear, IconScale } from './components/Icons';
+import { IconDumbbell, IconFork, IconGear, IconScale } from './components/Icons';
 
 const TABS = [
-  { id: 'workout', label: 'Tập', icon: IconDumbbell, title: 'Buổi tập', Screen: Workout },
-  { id: 'nutrition', label: 'PFC', icon: IconBowl, title: 'Dinh dưỡng PFC', Screen: Nutrition },
-  { id: 'body', label: 'Cơ thể', icon: IconScale, title: 'Thể trạng', Screen: Body },
-  { id: 'settings', label: 'Cài đặt', icon: IconGear, title: 'Cài đặt & Sao lưu', Screen: Settings },
+  { id: 'workout', label: 'Tập luyện', icon: IconDumbbell, title: 'Tập luyện', Screen: Workout },
+  { id: 'nutrition', label: 'Dinh dưỡng', icon: IconFork, title: 'Dinh dưỡng', Screen: Nutrition },
+  { id: 'body', label: 'Cơ thể', icon: IconScale, title: 'Cơ thể', Screen: Body },
+  { id: 'settings', label: 'Cài đặt', icon: IconGear, title: 'Cài đặt', Screen: Settings },
 ];
+
+const WEEKDAY = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+
+// theme: 'dark' | 'light' | 'system'
+function useTheme(theme) {
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = theme === 'dark' || (theme === 'system' && mq.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#000000' : '#f2f2f7');
+    };
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, [theme]);
+}
 
 export default function App() {
   const theme = useSettings((s) => s.theme);
+  useTheme(theme);
   const [tab, setTab] = useState(() => {
     try {
       return sessionStorage.getItem('shuru-tab') || 'workout';
@@ -24,11 +41,6 @@ export default function App() {
       return 'workout';
     }
   });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme !== 'light');
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f4f4f1' : '#0e0e10');
-  }, [theme]);
 
   useEffect(() => {
     try {
@@ -44,23 +56,22 @@ export default function App() {
 
   const current = TABS.find((t) => t.id === tab) || TABS[0];
   const Screen = current.Screen;
+  const now = new Date();
+  const dateLine = `${WEEKDAY[now.getDay()]}, ${now.getDate()} tháng ${now.getMonth() + 1}`;
 
   return (
     <div className="min-h-full">
-      <main className="mx-auto max-w-lg px-4 pb-[calc(96px+env(safe-area-inset-bottom))]">
-        {tab !== 'workout' && (
-          <header className="pt-[calc(16px+env(safe-area-inset-top))] pb-4">
-            <div className="text-xs text-muted">{fmtDate(todayStr())}</div>
-            <h1 className="text-2xl font-black tracking-tight">{current.title}</h1>
-          </header>
-        )}
-        {tab === 'workout' && <WorkoutHeader />}
+      <main className="mx-auto max-w-lg px-4 pb-[calc(110px+env(safe-area-inset-bottom))]">
+        <header className="pt-[calc(14px+env(safe-area-inset-top))] pb-3">
+          <div className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted">{dateLine}</div>
+          <h1 className="text-[34px] leading-[1.15] font-bold tracking-[-0.03em]">{current.title}</h1>
+        </header>
         <Screen />
       </main>
 
       <RestTimer />
 
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur border-t border-line safe-bottom">
+      <nav className="fixed bottom-0 inset-x-0 z-40 material hairline-t safe-bottom">
         <div className="mx-auto max-w-lg grid grid-cols-4">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -69,27 +80,16 @@ export default function App() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`h-16 flex flex-col items-center justify-center gap-1 ${on ? 'text-accent' : 'text-muted'}`}
+                className={`h-[56px] flex flex-col items-center justify-center gap-0.5 transition-colors ${on ? 'text-accent' : 'text-faint'}`}
                 aria-current={on ? 'page' : undefined}
               >
-                <Icon width={24} height={24} strokeWidth={on ? 2.4 : 1.8} />
-                <span className="text-[11px] font-semibold">{t.label}</span>
+                <Icon size={28} filled={on} />
+                <span className="text-[10px] font-medium tracking-[0.01em]">{t.label}</span>
               </button>
             );
           })}
         </div>
       </nav>
     </div>
-  );
-}
-
-function WorkoutHeader() {
-  return (
-    <header className="pt-[calc(16px+env(safe-area-inset-top))] pb-4 flex items-end justify-between">
-      <div>
-        <div className="text-xs text-muted">{fmtDate(todayStr())} · khung 6:00 – 6:50</div>
-        <h1 className="text-2xl font-black tracking-tight">Linh's Fitness</h1>
-      </div>
-    </header>
   );
 }

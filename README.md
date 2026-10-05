@@ -1,4 +1,4 @@
-# Linh's Fitness Tracker
+# Baki Goal
 
 PWA local-first: lịch tập 6 ngày luân phiên, nhật ký set/reps có tham chiếu buổi trước, bộ đếm nghỉ, nhật ký PFC với trần Fat, cân nặng + trung bình trượt 7 ngày, ảnh check-in, sao lưu JSON/CSV. Không máy chủ, không cloud — toàn bộ dữ liệu nằm trong IndexedDB của trình duyệt.
 
@@ -49,10 +49,19 @@ Sau lần mở đầu tiên có mạng, app chạy hoàn toàn offline (kể c�
 - Đổi tên miền host = kho dữ liệu mới. Khi chuyển host, sao lưu JSON ở bản cũ rồi khôi phục ở bản mới.
 - iPhone không cho web app rung máy (Vibration API); khi hết giờ nghỉ app phát âm báo. Hãy tắt chế độ im lặng nếu muốn nghe.
 
+## Giao diện
+
+Thiết kế theo phong cách iOS: tiêu đề lớn, thẻ nhóm bo góc, thanh tab mờ, màu hệ thống iOS, chế độ Tự động/Tối/Sáng. Icon app và bộ icon trong app được vẽ riêng cho Baki Goal.
+
+## Mục tiêu tự động
+
+Cài đặt → bật "Tự tính mục tiêu": Kcal = TDEE (Mifflin–St Jeor theo tuổi, chiều cao, cân gần nhất, mức vận động) − thâm hụt theo tốc độ giảm (0,25–1 kg/tuần, 7.700 kcal/kg). Protein = g/kg × cân hiện tại. Carbs = phần còn lại sau Protein và trần Fat. Đổi cân mục tiêu để xem ngày dự kiến chạm mốc; đạt mục tiêu thì tự chuyển sang ăn duy trì.
+
 ## Dinh dưỡng trong app
 
-- **Kho món** (tab PFC → Thêm món): ~80 thực phẩm và món Việt có P/F/C theo khẩu phần, tìm không cần gõ dấu, chọn ×0.5–×2. Món nhiều Fat (≥10g/phần) có nhãn cảnh báo. Nguồn: USDA FoodData Central, Bảng thành phần thực phẩm Việt Nam, NutriHome; món nhà nấu là ước tính.
-- **Thực đơn mẫu A–D**: ~1.900 kcal, Protein ~150g, Fat 22–26g, chia theo lịch tập 6:00 sáng. Thêm từng bữa hoặc cả ngày bằng 1 chạm.
+- **Kho món** (tab PFC → Thêm món): hơn 300 thực phẩm và món Việt, Nhật, Hàn, Âu, Trung–Thái, đồ uống có P/F/C theo khẩu phần, tìm không cần gõ dấu, chọn ×0.5–×2. Món nhiều Fat (≥10g/phần) có nhãn cảnh báo. Nguồn: USDA FoodData Central, Bảng thành phần thực phẩm Việt Nam, NutriHome; món nhà nấu là ước tính.
+- **Thực đơn mẫu A–I** (Việt, Nhật, Hàn, Âu, ăn ngoài, ngày nghỉ): khẩu phần tự co giãn theo mục tiêu Kcal/Protein hiện hành. Thêm từng bữa hoặc cả ngày bằng 1 chạm.
+- **Gợi ý khi nhập tay**: gõ tên món sẽ hiện gợi ý kèm calo, chạm để điền sẵn P/F/C.
 - **Tính TDEE** (Cài đặt): công thức Mifflin–St Jeor theo tuổi, chiều cao, cân nặng gần nhất và mức vận động.
 - **Hướng dẫn dinh dưỡng**: tóm tắt khuyến nghị protein, fat, tốc độ giảm cân kèm nguồn.
 

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { PROGRAM, dayOf, nextDayIndex } from '../lib/program';
+import { DAY_COLORS, PROGRAM, dayOf, nextDayIndex } from '../lib/program';
 import { useRest, useSettings } from '../lib/store';
-import { fmtDate, fmtNum, fmtClock, todayStr, unlockAudio } from '../lib/utils';
+import { fmtDate, fmtNum, fmtClock, unlockAudio } from '../lib/utils';
 import { useWakeLock } from '../lib/useWakeLock';
 import {
   activeWorkout,
@@ -17,8 +17,8 @@ import {
   removeLastSet,
   startWorkout,
 } from '../lib/workout';
-import { Button, Card, NumField, SectionTitle, Sheet } from '../components/ui';
-import { IconCheck, IconChevron } from '../components/Icons';
+import { Button, Card, GroupLabel, NumField, Sheet } from '../components/ui';
+import { IconCheck, IconChevron, IconDumbbell, IconTimer } from '../components/Icons';
 
 const SESSION_MIN = 50;
 
@@ -26,6 +26,24 @@ export default function Workout() {
   const active = useLiveQuery(() => activeWorkout(), []);
   if (active === undefined) return null;
   return active ? <ActiveSession workout={active} /> : <Planner />;
+}
+
+// Ô vuông màu nhận diện ngày tập
+function DayBadge({ dayIndex, size = 44 }) {
+  return (
+    <span
+      className="grid place-items-center shrink-0 text-white font-rounded font-bold tnum"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.28,
+        fontSize: size * 0.38,
+        background: `linear-gradient(160deg, ${DAY_COLORS[dayIndex]}, color-mix(in srgb, ${DAY_COLORS[dayIndex]} 70%, #000))`,
+      }}
+    >
+      D{dayIndex}
+    </span>
+  );
 }
 
 /* ---------------- Màn hình chọn buổi (chưa tập) ---------------- */
@@ -37,6 +55,7 @@ function Planner() {
   const day = dayOf(dayIndex);
   const prev = useLiveQuery(() => previousSession(dayIndex), [dayIndex]);
   const [busy, setBusy] = useState(false);
+  const color = DAY_COLORS[dayIndex];
 
   const start = async () => {
     unlockAudio(); // mở khoá âm thanh trên iOS bằng chính thao tác chạm này
@@ -46,63 +65,65 @@ function Planner() {
   };
 
   return (
-    <div className="space-y-4">
-      <Card className="relative overflow-hidden">
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">
-          {manual && manual !== suggested ? 'Chọn thủ công' : 'Buổi tiếp theo trong chu kỳ'}
-        </div>
-        <div className="mt-2 flex items-baseline gap-3">
-          <span className="text-6xl font-black tnum text-accent leading-none">D{dayIndex}</span>
-          <div>
-            <div className="text-2xl font-bold leading-tight">{day.muscle}</div>
-            <div className="text-sm text-muted">{day.focus}</div>
+    <div>
+      <Card className="overflow-hidden !p-0">
+        <div className="p-4 pb-3" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 16%, transparent), transparent)` }}>
+          <div className="flex items-center gap-3.5">
+            <DayBadge dayIndex={dayIndex} size={58} />
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color }}>
+                {manual && manual !== suggested ? 'Chọn thủ công' : 'Buổi tiếp theo'}
+              </div>
+              <div className="text-[28px] leading-tight font-bold tracking-[-0.03em]">{day.muscle}</div>
+              <div className="text-[15px] text-muted">{day.focus}</div>
+            </div>
           </div>
         </div>
-        <ol className="mt-4 space-y-2">
+        <ol className="px-4">
           {day.exercises.map((ex, i) => {
             const sets = prev?.byExercise?.[ex];
             return (
-              <li key={ex} className="flex gap-3">
-                <span className="w-5 shrink-0 text-faint tnum font-semibold">{i + 1}</span>
+              <li key={ex} className="flex gap-3 py-2.5 hairline-b last:shadow-none">
+                <span className="w-5 shrink-0 text-muted font-rounded tnum font-semibold text-[15px] pt-px">{i + 1}</span>
                 <div className="min-w-0">
-                  <div className="font-medium leading-snug">{ex}</div>
+                  <div className="text-[16px] leading-snug">{ex}</div>
                   {sets?.length > 0 && (
-                    <div className="text-xs text-faint tnum truncate">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join(' · ')}</div>
+                    <div className="text-[13px] text-muted font-rounded tnum truncate">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
                   )}
                 </div>
               </li>
             );
           })}
         </ol>
-        {prev?.workout && <p className="mt-3 text-xs text-muted">Lần tập {day.muscle} gần nhất: {fmtDate(prev.workout.date)}</p>}
-        <Button variant="primary" className="w-full mt-5 h-14 text-lg" onClick={start} disabled={busy}>
-          Bắt đầu buổi tập · {SESSION_MIN}′
-        </Button>
+        <div className="p-4 pt-2">
+          {prev?.workout && <p className="text-[13px] text-muted mb-3">Lần gần nhất: {fmtDate(prev.workout.date)}</p>}
+          <Button variant="primary" className="w-full h-[52px] flex items-center justify-center gap-2" onClick={start} disabled={busy} style={{ background: color }}>
+            <IconDumbbell size={22} filled />
+            Bắt đầu · {SESSION_MIN} phút
+          </Button>
+        </div>
       </Card>
 
-      <Card>
-        <SectionTitle>Đổi nhóm cơ thủ công</SectionTitle>
-        <div className="grid grid-cols-3 gap-2">
-          {PROGRAM.map((d) => (
-            <button
-              key={d.dayIndex}
-              onClick={() => setManual(d.dayIndex === suggested ? null : d.dayIndex)}
-              className={`min-h-14 rounded-xl px-2 text-left border ${
-                d.dayIndex === dayIndex ? 'border-accent bg-accent/10' : 'border-line bg-surface-2'
-              }`}
-            >
-              <div className="text-[11px] font-bold text-muted tnum">
-                D{d.dayIndex}
-                {d.dayIndex === suggested && ' · gợi ý'}
-              </div>
-              <div className="text-sm font-semibold leading-tight">{d.muscle}</div>
-            </button>
-          ))}
+      <GroupLabel>Chu kỳ 6 ngày</GroupLabel>
+      <Card className="!p-2">
+        <div className="grid grid-cols-3 gap-1.5">
+          {PROGRAM.map((d) => {
+            const on = d.dayIndex === dayIndex;
+            return (
+              <button
+                key={d.dayIndex}
+                onClick={() => setManual(d.dayIndex === suggested ? null : d.dayIndex)}
+                className={`press flex flex-col items-center gap-1.5 rounded-[14px] py-3 ${on ? 'bg-surface-2' : ''}`}
+              >
+                <DayBadge dayIndex={d.dayIndex} size={38} />
+                <span className="text-[13px] font-semibold leading-tight">{d.muscle}</span>
+                <span className="text-[11px] text-muted -mt-1 h-3.5">{d.dayIndex === suggested ? 'gợi ý' : ''}</span>
+              </button>
+            );
+          })}
         </div>
-        <p className="mt-3 text-xs text-faint">
-          Chu kỳ xoay vòng theo buổi đã hoàn thành, không theo thứ trong tuần. Nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp.
-        </p>
       </Card>
+      <p className="px-4 pt-2 text-[13px] text-muted">Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần. Nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp.</p>
 
       <History />
     </div>
@@ -120,51 +141,72 @@ function History() {
     });
   }, []);
   const [open, setOpen] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
   if (!data?.length) return null;
   return (
-    <Card>
-      <SectionTitle>Lịch sử buổi tập</SectionTitle>
-      <ul className="divide-y divide-line -my-1">
-        {data.map((w) => {
-          const mins = Math.round((w.completedAt - w.startedAt) / 60000);
-          const isOpen = open === w.id;
-          const grouped = {};
-          w.sets.sort((a, b) => (a.exerciseOrder ?? 0) - (b.exerciseOrder ?? 0) || a.setIndex - b.setIndex)
-            .forEach((s) => (grouped[s.exerciseName] ||= []).push(s));
-          return (
-            <li key={w.id} className="py-1">
-              <button className="w-full flex items-center gap-3 min-h-12 text-left" onClick={() => setOpen(isOpen ? null : w.id)}>
-                <span className="w-10 text-accent font-black tnum">D{w.dayIndex}</span>
-                <span className="flex-1">
-                  <span className="font-semibold">{w.targetMuscle}</span>
-                  <span className="block text-xs text-muted tnum">
-                    {fmtDate(w.date)} · {w.sets.length} set · {Math.round(w.volume).toLocaleString('vi-VN')} kg · {mins}′
+    <>
+      <GroupLabel>Lịch sử</GroupLabel>
+      <Card className="!py-1">
+        <ul>
+          {data.map((w) => {
+            const mins = Math.round((w.completedAt - w.startedAt) / 60000);
+            const isOpen = open === w.id;
+            const grouped = {};
+            w.sets
+              .sort((a, b) => (a.exerciseOrder ?? 0) - (b.exerciseOrder ?? 0) || a.setIndex - b.setIndex)
+              .forEach((s) => (grouped[s.exerciseName] ||= []).push(s));
+            return (
+              <li key={w.id} className="hairline-b last:shadow-none">
+                <button className="w-full flex items-center gap-3 min-h-[60px] text-left" onClick={() => setOpen(isOpen ? null : w.id)}>
+                  <DayBadge dayIndex={w.dayIndex} size={36} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-semibold text-[16px]">{w.targetMuscle}</span>
+                    <span className="block text-[13px] text-muted font-rounded tnum">
+                      {fmtDate(w.date)} · {w.sets.length} set · {Math.round(w.volume).toLocaleString('vi-VN')} kg · {mins} phút
+                    </span>
                   </span>
-                </span>
-                <IconChevron dir={isOpen ? 'up' : 'down'} className="text-faint" width={18} />
-              </button>
-              {isOpen && (
-                <div className="pb-3 pl-13 space-y-1.5 text-sm">
-                  {Object.entries(grouped).map(([name, sets]) => (
-                    <div key={name}>
-                      <div className="text-muted">{name}</div>
-                      <div className="tnum">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join(' · ')}</div>
-                      {w.notes?.[name] && <div className="text-xs text-faint italic">{w.notes[name]}</div>}
-                    </div>
-                  ))}
-                  <button
-                    className="text-xs text-danger mt-2 min-h-10"
-                    onClick={() => confirm('Xoá buổi tập này khỏi lịch sử?') && discardWorkout(w.id)}
-                  >
-                    Xoá buổi này
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
+                  <IconChevron dir={isOpen ? 'up' : 'down'} className="text-faint" size={16} />
+                </button>
+                {isOpen && (
+                  <div className="pb-3 pl-12 space-y-2 text-[15px]">
+                    {Object.entries(grouped).map(([name, sets]) => (
+                      <div key={name}>
+                        <div className="text-muted text-[13px]">{name}</div>
+                        <div className="font-rounded tnum">{sets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
+                        {w.notes?.[name] && <div className="text-[13px] text-muted italic">{w.notes[name]}</div>}
+                      </div>
+                    ))}
+                    <button className="text-[15px] text-danger min-h-10" onClick={() => setConfirmDel(w)}>
+                      Xoá buổi này
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+      <Sheet open={!!confirmDel} onClose={() => setConfirmDel(null)} title="Xoá buổi tập?">
+        {confirmDel && (
+          <>
+            <p className="text-muted mb-4">
+              Buổi {confirmDel.targetMuscle} ngày {fmtDate(confirmDel.date)} sẽ bị xoá khỏi lịch sử. Các buổi sau sẽ không còn dùng buổi này làm tham chiếu.
+            </p>
+            <Button
+              variant="danger"
+              className="w-full"
+              onClick={async () => {
+                await discardWorkout(confirmDel.id);
+                setConfirmDel(null);
+                setOpen(null);
+              }}
+            >
+              Xoá buổi tập
+            </Button>
+          </>
+        )}
+      </Sheet>
+    </>
   );
 }
 
@@ -174,7 +216,7 @@ function ActiveSession({ workout }) {
   const prev = useLiveQuery(() => previousSession(workout.dayIndex, workout.id), [workout.dayIndex, workout.id]);
   const wake = useWakeLock(true);
   const day = dayOf(workout.dayIndex);
-  const [sheet, setSheet] = useState(null); // 'finish' | 'switch'
+  const [sheet, setSheet] = useState(null); // 'finish' | 'switch' | 'discard'
 
   const groups = useMemo(() => {
     const g = {};
@@ -202,23 +244,31 @@ function ActiveSession({ workout }) {
         />
       ))}
 
-      <div className="flex gap-2 pt-2">
-        <Button variant="outline" className="flex-1" onClick={() => setSheet('switch')}>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <Button variant="ghost" onClick={() => setSheet('switch')}>
           Đổi nhóm cơ
         </Button>
-        <Button variant="primary" className="flex-1" onClick={() => setSheet('finish')}>
+        <Button variant="primary" onClick={() => setSheet('finish')} style={{ background: 'var(--go)' }}>
           Kết thúc buổi
         </Button>
       </div>
 
       <Sheet open={sheet === 'finish'} onClose={() => setSheet(null)} title="Kết thúc buổi tập?">
-        <p className="text-muted mb-4">
-          Đã hoàn thành <b className="text-ink tnum">{done}/{total}</b> set. Các set chưa tick sẽ không được tính vào lịch sử.
-        </p>
+        <div className="flex items-center gap-4 rounded-[18px] bg-surface p-4 mb-4">
+          <DayBadge dayIndex={workout.dayIndex} size={48} />
+          <div>
+            <div className="text-[28px] font-bold font-rounded tnum leading-none">
+              {done}
+              <span className="text-muted text-[20px]">/{total}</span>
+            </div>
+            <div className="text-[13px] text-muted mt-1">set đã hoàn thành. Set chưa tick sẽ không vào lịch sử.</div>
+          </div>
+        </div>
         <div className="space-y-2">
           <Button
             variant="primary"
-            className="w-full h-14"
+            className="w-full h-[52px]"
+            style={{ background: 'var(--go)' }}
             onClick={async () => {
               useRest.getState().stop();
               await finishWorkout(workout.id);
@@ -229,37 +279,47 @@ function ActiveSession({ workout }) {
           <Button variant="ghost" className="w-full" onClick={() => setSheet(null)}>
             Tập tiếp
           </Button>
-          <Button
-            variant="outline"
-            className="w-full text-danger"
-            onClick={async () => {
-              if (!confirm('Huỷ buổi này và xoá mọi set đã ghi?')) return;
-              useRest.getState().stop();
-              await discardWorkout(workout.id);
-            }}
-          >
-            Huỷ buổi (không lưu)
+          <Button variant="destructive" className="w-full" onClick={() => setSheet('discard')}>
+            Huỷ buổi, không lưu
           </Button>
         </div>
       </Sheet>
 
-      <Sheet open={sheet === 'switch'} onClose={() => setSheet(null)} title="Đổi nhóm cơ cho buổi này">
+      <Sheet open={sheet === 'discard'} onClose={() => setSheet(null)} title="Huỷ buổi tập?">
+        <p className="text-muted mb-4">Mọi set đã ghi trong buổi này sẽ bị xoá.</p>
+        <Button
+          variant="danger"
+          className="w-full"
+          onClick={async () => {
+            useRest.getState().stop();
+            await discardWorkout(workout.id);
+          }}
+        >
+          Huỷ buổi
+        </Button>
+      </Sheet>
+
+      <Sheet open={sheet === 'switch'} onClose={() => setSheet(null)} title="Đổi nhóm cơ">
         {done > 0 ? (
           <p className="text-muted">Bạn đã tick {done} set. Hãy huỷ buổi hiện tại trước nếu muốn đổi sang nhóm cơ khác.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-[18px] bg-surface">
             {PROGRAM.map((d) => (
-              <Button
+              <button
                 key={d.dayIndex}
-                variant={d.dayIndex === workout.dayIndex ? 'primary' : 'ghost'}
-                className="h-14"
+                className="w-full flex items-center gap-3 px-4 min-h-[60px] hairline-b last:shadow-none text-left"
                 onClick={async () => {
                   setSheet(null);
                   if (d.dayIndex !== workout.dayIndex) await changeWorkoutDay(workout.id, d.dayIndex);
                 }}
               >
-                D{d.dayIndex} · {d.muscle}
-              </Button>
+                <DayBadge dayIndex={d.dayIndex} size={34} />
+                <span className="flex-1">
+                  <span className="block font-semibold">{d.muscle}</span>
+                  <span className="block text-[13px] text-muted">{d.focus}</span>
+                </span>
+                {d.dayIndex === workout.dayIndex && <IconCheck size={20} className="text-accent" />}
+              </button>
             ))}
           </div>
         )}
@@ -277,27 +337,30 @@ function SessionHeader({ workout, day, done, total, wake, onFinish }) {
   const elapsed = (now - workout.startedAt) / 1000;
   const over = elapsed > SESSION_MIN * 60;
   const pct = Math.min(100, (elapsed / (SESSION_MIN * 60)) * 100);
+  const color = over ? 'var(--warn)' : 'var(--go)';
   return (
-    <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-bg/95 backdrop-blur border-b border-line safe-top">
+    <div className="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 px-4 py-2.5 material hairline-b">
       <div className="flex items-center gap-3">
-        <span className="text-3xl font-black text-accent tnum">D{workout.dayIndex}</span>
+        <DayBadge dayIndex={workout.dayIndex} size={40} />
         <div className="flex-1 min-w-0">
-          <div className="font-bold leading-tight truncate">{day.muscle}</div>
-          <div className="text-xs text-muted tnum">
-            {done}/{total} set ·{' '}
-            {wake === 'on' ? 'Màn hình luôn sáng' : wake === 'unsupported' ? 'Máy không hỗ trợ giữ sáng' : 'Đang xin giữ sáng…'}
+          <div className="font-semibold text-[17px] leading-tight truncate">{day.muscle}</div>
+          <div className="text-[13px] text-muted font-rounded tnum">
+            {done}/{total} set · {wake === 'on' ? 'Giữ sáng' : wake === 'unsupported' ? 'Không giữ sáng' : '…'}
           </div>
         </div>
         <div className="text-right">
-          <div className={`text-2xl font-bold tnum leading-none ${over ? 'text-warn' : ''}`}>{fmtClock(elapsed)}</div>
-          <div className="text-[11px] text-muted">/ {SESSION_MIN}:00</div>
+          <div className="flex items-center gap-1 text-[22px] font-semibold font-rounded tnum leading-none" style={{ color }}>
+            <IconTimer size={18} />
+            {fmtClock(elapsed)}
+          </div>
+          <div className="text-[11px] text-muted mt-0.5">/ {SESSION_MIN}:00</div>
         </div>
-        <button onClick={onFinish} className="h-12 w-12 rounded-xl bg-accent text-accent-ink grid place-items-center" aria-label="Kết thúc buổi">
-          <IconCheck width={22} />
+        <button onClick={onFinish} className="press h-11 w-11 rounded-full grid place-items-center text-white" style={{ background: 'var(--go)' }} aria-label="Kết thúc buổi">
+          <IconCheck size={22} />
         </button>
       </div>
-      <div className="mt-2 h-1 rounded-full bg-surface-2 overflow-hidden">
-        <div className={`h-full ${over ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${pct}%` }} />
+      <div className="mt-2 h-[3px] rounded-full overflow-hidden" style={{ background: `color-mix(in srgb, ${color} 20%, transparent)` }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   );
@@ -308,6 +371,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
   const startRest = useRest((s) => s.start);
   const [note, setNote] = useState(workout.notes?.[name] || '');
   const allDone = sets.every((s) => s.isCompleted);
+  const doneCount = sets.filter((s) => s.isCompleted).length;
 
   const saveNote = async () => {
     const w = await db.workouts.get(workout.id);
@@ -325,33 +389,38 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
   };
 
   return (
-    <Card className={allDone ? 'border-accent/50' : ''}>
-      <div className="flex items-start gap-3 mb-1">
-        <span className="text-faint font-bold tnum pt-0.5">{order + 1}</span>
-        <h3 className="flex-1 font-bold text-[17px] leading-snug">{name}</h3>
-        {allDone && <IconCheck width={20} className="text-accent shrink-0 mt-0.5" />}
+    <Card>
+      <div className="flex items-start gap-3 mb-0.5">
+        <span
+          className="mt-0.5 h-6 min-w-6 px-1.5 rounded-full grid place-items-center text-[13px] font-bold font-rounded tnum"
+          style={allDone ? { background: 'var(--go)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--muted)' }}
+        >
+          {allDone ? <IconCheck size={14} /> : order + 1}
+        </span>
+        <h3 className="flex-1 font-semibold text-[17px] leading-snug tracking-[-0.02em]">{name}</h3>
+        <span className="text-[13px] text-muted font-rounded tnum pt-0.5">
+          {doneCount}/{sets.length}
+        </span>
       </div>
-      <p className="text-xs text-faint tnum mb-3 pl-6">
-        {prevSets.length
-          ? `Lần trước (${fmtDate(prevDate)}): ${prevSets.map((s) => `${fmtNum(s.weightKg)}kg×${s.reps ?? '–'}`).join(' | ')}`
-          : 'Chưa có dữ liệu buổi trước'}
+      <p className="text-[13px] text-muted font-rounded tnum mb-3 pl-9">
+        {prevSets.length ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => `${fmtNum(s.weightKg)}×${s.reps ?? '–'}`).join('  ')}` : 'Chưa có dữ liệu buổi trước'}
       </p>
 
-      <div className="grid grid-cols-[2.25rem_1fr_1fr_3.5rem] gap-2 items-center text-[11px] font-semibold uppercase tracking-wider text-muted mb-1.5 px-0.5">
+      <div className="grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center text-[12px] font-medium text-muted mb-1 px-0.5">
         <span className="text-center">Set</span>
-        <span className="text-center">Tạ (kg)</span>
-        <span className="text-center">Reps</span>
-        <span className="text-center">✓</span>
+        <span className="text-center">kg</span>
+        <span className="text-center">reps</span>
+        <span />
       </div>
       <div className="space-y-2">
         {sets.map((s, i) => {
           const ref = prevSets[i];
+          const done = !!s.isCompleted;
           return (
-            <div
-              key={s.id}
-              className={`grid grid-cols-[2.25rem_1fr_1fr_3.5rem] gap-2 items-center rounded-xl ${s.isCompleted ? '[&_input]:text-muted [&_input]:bg-transparent [&_input]:border-line' : ''}`}
-            >
-              <span className={`text-center font-bold tnum ${s.isCompleted ? 'text-accent' : 'text-muted'}`}>{s.setIndex}</span>
+            <div key={s.id} className={`grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center ${done ? '[&_input]:bg-transparent [&_input]:text-muted' : ''}`}>
+              <span className="text-center font-semibold font-rounded tnum text-[17px]" style={{ color: done ? 'var(--go)' : 'var(--muted)' }}>
+                {s.setIndex}
+              </span>
               <NumField
                 value={s.weightKg}
                 placeholder={ref ? fmtNum(ref.weightKg) : 'kg'}
@@ -367,25 +436,24 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
               />
               <button
                 onClick={() => toggle(s, i)}
-                aria-pressed={!!s.isCompleted}
+                aria-pressed={done}
                 aria-label={`Hoàn thành set ${s.setIndex}`}
-                className={`h-12 w-14 rounded-xl grid place-items-center border-2 transition-colors ${
-                  s.isCompleted ? 'bg-accent border-accent text-accent-ink' : 'border-line text-faint active:bg-surface-2'
-                }`}
+                className="press h-12 w-[3.25rem] rounded-[12px] grid place-items-center transition-colors"
+                style={done ? { background: 'var(--go)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--faint)' }}
               >
-                <IconCheck width={24} />
+                <IconCheck size={24} />
               </button>
             </div>
           );
         })}
       </div>
 
-      <div className="flex gap-2 mt-3">
-        <Button variant="ghost" className="flex-1 text-sm" onClick={() => addSet(workout.id, name, order)}>
+      <div className="flex items-center gap-1 mt-2.5 -mx-1">
+        <Button variant="plain" className="text-[15px] px-3" onClick={() => addSet(workout.id, name, order)}>
           + Thêm set
         </Button>
-        <Button variant="ghost" className="text-sm" disabled={sets.length <= 1} onClick={() => removeLastSet(workout.id, name)}>
-          − Bớt set
+        <Button variant="plain" className="text-[15px] px-3 disabled:bg-transparent" disabled={sets.length <= 1} onClick={() => removeLastSet(workout.id, name)}>
+          Bớt set
         </Button>
       </div>
       <input
@@ -393,11 +461,9 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         onBlur={saveNote}
-        placeholder="Ghi chú nhanh (vd: ghế dốc nấc 3, form siết tốt)"
-        className="mt-2 h-11 w-full rounded-xl bg-transparent border border-dashed border-line px-3 text-sm outline-none focus:border-accent placeholder:text-faint"
+        placeholder="Ghi chú (vd: ghế dốc nấc 3, form siết tốt)"
+        className="h-11 w-full rounded-[12px] bg-surface-2 px-3.5 text-[15px] outline-none focus:ring-2 focus:ring-accent placeholder:text-faint"
       />
     </Card>
   );
 }
-
-export const workoutTodayLabel = () => fmtDate(todayStr());

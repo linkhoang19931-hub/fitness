@@ -16,7 +16,7 @@ export default function RestTimer() {
     setDone(false);
     const tick = () => setNow(Date.now());
     tick();
-    const id = setInterval(tick, 250);
+    const id = setInterval(tick, 200);
     document.addEventListener('visibilitychange', tick);
     return () => {
       clearInterval(id);
@@ -41,33 +41,42 @@ export default function RestTimer() {
   }, [remaining, endAt, soundOn, vibrateOn, stop]);
 
   if (!endAt) return null;
-  const pct = total ? Math.max(0, Math.min(100, (remaining / total) * 100)) : 0;
+  const pct = total ? Math.max(0, Math.min(1, remaining / total)) : 0;
+  const R = 22;
+  const C = 2 * Math.PI * R;
 
   return (
-    <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 px-3 pb-2">
-      <div
-        className={`mx-auto max-w-lg rounded-2xl border shadow-2xl overflow-hidden ${
-          done ? 'bg-accent text-accent-ink border-accent' : 'bg-surface border-line'
-        }`}
-      >
-        <div className="h-1 bg-surface-2">
-          <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex items-center gap-2 p-2.5">
-          <div className="flex-1 pl-2">
-            <div className={`text-[11px] font-semibold uppercase tracking-wider ${done ? '' : 'text-muted'}`}>
-              {done ? 'Hết giờ nghỉ' : 'Nghỉ giữa hiệp'}
-            </div>
-            <div className="text-4xl font-bold tnum leading-none mt-0.5" aria-live="polite">
-              {done ? 'VÀO SET!' : fmtClock(remaining)}
+    <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5">
+      <div className="mx-auto max-w-lg rounded-[22px] material shadow-[0_10px_40px_rgba(0,0,0,0.35)] border border-line/60">
+        <div className="flex items-center gap-3 p-2.5 pl-3">
+          <div className="relative h-[54px] w-[54px] shrink-0">
+            <svg viewBox="0 0 54 54" className="-rotate-90 h-full w-full">
+              <circle cx="27" cy="27" r={R} fill="none" stroke="var(--go)" strokeOpacity="0.2" strokeWidth="5" />
+              <circle
+                cx="27"
+                cy="27"
+                r={R}
+                fill="none"
+                stroke="var(--go)"
+                strokeWidth="5"
+                strokeLinecap="round"
+                strokeDasharray={`${C * (done ? 1 : pct)} ${C}`}
+                style={{ transition: 'stroke-dasharray 200ms linear' }}
+              />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium text-muted whitespace-nowrap">{done ? 'Hết giờ nghỉ' : 'Nghỉ'}</div>
+            <div className="text-[32px] leading-none font-semibold font-rounded tnum tracking-[-0.02em]" aria-live="polite" style={{ color: done ? 'var(--go)' : undefined }}>
+              {done ? 'Vào set!' : fmtClock(remaining)}
             </div>
           </div>
           {!done && (
             <>
-              <button onClick={() => adjust(-15)} className="h-14 w-14 rounded-xl bg-surface-2 font-bold tnum active:bg-line">
+              <button onClick={() => adjust(-15)} className="press h-11 w-11 rounded-full bg-surface-2 text-[14px] font-semibold font-rounded tnum">
                 −15
               </button>
-              <button onClick={() => adjust(30)} className="h-14 w-14 rounded-xl bg-surface-2 font-bold tnum active:bg-line">
+              <button onClick={() => adjust(30)} className="press h-11 w-11 rounded-full bg-surface-2 text-[14px] font-semibold font-rounded tnum">
                 +30
               </button>
             </>
@@ -77,9 +86,10 @@ export default function RestTimer() {
               setDone(false);
               stop();
             }}
-            className={`h-14 px-4 rounded-xl font-bold ${done ? 'bg-accent-ink text-accent' : 'bg-accent text-accent-ink'}`}
+            className="press h-11 px-4 rounded-full text-[15px] font-semibold text-white"
+            style={{ background: 'var(--go)' }}
           >
-            {done ? 'OK' : 'Skip'}
+            {done ? 'OK' : 'Bỏ qua'}
           </button>
         </div>
       </div>

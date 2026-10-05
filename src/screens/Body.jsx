@@ -5,13 +5,13 @@ import { db } from '../lib/db';
 import { compressPhoto } from '../lib/image';
 import { useSettings } from '../lib/store';
 import { addDays, fmtDate, fmtNum, fmtShort, movingAverage7, todayStr } from '../lib/utils';
-import { Button, Card, NumField, SectionTitle, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
+import { Button, Card, GroupLabel, NumField, Rings, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
 import { IconCamera, IconTrash } from '../components/Icons';
 
 export default function Body() {
   const [toast, showToast] = useToast();
   return (
-    <div className="space-y-4">
+    <div>
       <WeightCard showToast={showToast} />
       <PhotoSection showToast={showToast} />
       {toast}
@@ -27,13 +27,14 @@ function WeightCard({ showToast }) {
   const todayEntry = all.find((e) => e.date === today);
   const [input, setInput] = useState(null);
   const [range, setRange] = useState('30');
+  const [del, setDel] = useState(null);
 
   const withMA = useMemo(() => movingAverage7(all), [all]);
   const latest = withMA[withMA.length - 1];
   const trend = latest?.ma7 ?? null;
   const lost = trend !== null ? startWeight - trend : 0;
   const toGo = trend !== null ? trend - goalWeight : startWeight - goalWeight;
-  const progress = Math.max(0, Math.min(100, (lost / (startWeight - goalWeight)) * 100));
+  const progress = Math.max(0, Math.min(100, (lost / Math.max(startWeight - goalWeight, 0.1)) * 100));
 
   // Tốc độ giảm 14 ngày gần nhất (theo đường trung bình trượt)
   const rate = useMemo(() => {
@@ -67,49 +68,50 @@ function WeightCard({ showToast }) {
 
   return (
     <>
+      {/* Tiến độ tới cân mục tiêu */}
       <Card>
-        <SectionTitle>Cân sáng nay · bụng rỗng</SectionTitle>
+        <div className="flex items-center gap-5">
+          <Rings size={128} stroke={14} rings={[{ value: progress / 100, color: 'var(--go)' }]}>
+            <div>
+              <div className="text-[28px] font-bold font-rounded tnum leading-none">{Math.round(progress)}%</div>
+              <div className="text-[11px] text-muted mt-1">tới mục tiêu</div>
+            </div>
+          </Rings>
+          <div className="flex-1 space-y-2.5">
+            <Stat label="Xu hướng 7 ngày" value={trend !== null ? fmtNum(trend) : '–'} />
+            <Stat label="Đã giảm" value={trend !== null ? fmtNum(lost) : '–'} color="var(--go)" />
+            <Stat label={`Còn lại tới ${fmtNum(goalWeight)}`} value={fmtNum(Math.max(0, toGo))} />
+          </div>
+        </div>
+        {rate !== null && (
+          <p className="text-[13px] text-muted mt-3 font-rounded tnum">
+            2 tuần gần nhất: <b style={{ color: rate <= 0 ? 'var(--go)' : 'var(--warn)' }}>{rate > 0 ? '+' : ''}{fmtNum(rate)} kg/tuần</b>
+            {rate < -0.1 && toGo > 0 && ` · dự kiến tới đích sau ~${Math.ceil(toGo / -rate)} tuần`}
+          </p>
+        )}
+      </Card>
+
+      <GroupLabel>Cân sáng nay · bụng rỗng</GroupLabel>
+      <Card>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <NumField
               value={input}
               onCommit={setInput}
               placeholder={todayEntry ? fmtNum(todayEntry.weightKg) : latest ? fmtNum(latest.weightKg) : '80.4'}
-              className="text-2xl h-14 pr-10"
+              className="!text-[28px] !h-14 pr-10"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm">kg</span>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted text-[15px]">kg</span>
           </div>
-          <Button variant="primary" className="h-14 px-6" onClick={save} disabled={!input}>
+          <Button variant="primary" className="!h-14 px-6" onClick={save} disabled={!input}>
             {todayEntry ? 'Sửa' : 'Lưu'}
           </Button>
         </div>
-        {todayEntry && <p className="text-xs text-muted mt-2">Hôm nay đã ghi {fmtNum(todayEntry.weightKg)} kg. Nhập lại để sửa.</p>}
-
-        <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-          <Stat label="Xu hướng (TB7)" value={trend !== null ? fmtNum(trend) : '–'} unit="kg" />
-          <Stat label="Đã giảm" value={trend !== null ? fmtNum(lost) : '–'} unit="kg" accent={lost > 0} />
-          <Stat label="Còn lại" value={fmtNum(Math.max(0, toGo))} unit="kg" />
-        </div>
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-muted tnum mb-1">
-            <span>{fmtNum(startWeight)} kg</span>
-            <span>{Math.round(progress)}%</span>
-            <span>Đích {fmtNum(goalWeight)} kg</span>
-          </div>
-          <div className="h-2.5 rounded-full bg-surface-2 overflow-hidden">
-            <div className="h-full bg-accent rounded-full" style={{ width: `${progress}%` }} />
-          </div>
-          {rate !== null && (
-            <p className="text-xs text-muted mt-2 tnum">
-              Tốc độ 2 tuần gần nhất: <b className={rate <= 0 ? 'text-ink' : 'text-warn'}>{rate > 0 ? '+' : ''}{fmtNum(rate)} kg/tuần</b>
-              {rate < -0.1 && toGo > 0 && ` · dự kiến đến đích sau ~${Math.ceil(toGo / -rate)} tuần`}
-            </p>
-          )}
-        </div>
+        {todayEntry && <p className="text-[13px] text-muted mt-2">Hôm nay đã ghi {fmtNum(todayEntry.weightKg)} kg. Nhập lại để sửa.</p>}
       </Card>
 
+      <GroupLabel>Xu hướng</GroupLabel>
       <Card>
-        <SectionTitle>Biểu đồ xu hướng</SectionTitle>
         <Segmented
           value={range}
           onChange={setRange}
@@ -120,75 +122,91 @@ function WeightCard({ showToast }) {
           ]}
         />
         {chartData.length === 0 ? (
-          <p className="text-sm text-faint mt-6 mb-4 text-center">Chưa có số đo trong khoảng này.</p>
+          <p className="text-[15px] text-muted mt-6 mb-4 text-center">Chưa có số đo trong khoảng này.</p>
         ) : (
-          <div className="h-64 mt-3 -ml-3">
+          <div className="h-60 mt-3 -ml-3">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={fmtShort} tick={{ fill: 'var(--muted)', fontSize: 11 }} stroke="var(--line)" minTickGap={24} />
-                <YAxis domain={[yMin, yMax]} tick={{ fill: 'var(--muted)', fontSize: 11 }} stroke="var(--line)" width={40} allowDecimals={false} />
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={fmtShort} tick={{ fill: 'var(--muted)', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis domain={[yMin, yMax]} tick={{ fill: 'var(--muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={34} allowDecimals={false} orientation="right" />
                 <Tooltip
-                  contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, color: 'var(--ink)' }}
+                  contentStyle={{ background: 'var(--elevated)', border: 'none', borderRadius: 12, color: 'var(--ink)', boxShadow: '0 8px 30px rgba(0,0,0,.25)' }}
                   labelFormatter={(d) => fmtDate(d)}
                   formatter={(v, n) => [`${fmtNum(v)} kg`, n === 'ma7' ? 'TB 7 ngày' : 'Thực tế']}
                 />
-                <ReferenceLine y={startWeight} stroke="var(--muted)" strokeDasharray="4 4" label={{ value: `Bắt đầu ${fmtNum(startWeight)}`, fill: 'var(--muted)', fontSize: 11, position: 'insideTopRight' }} />
-                <ReferenceLine y={goalWeight} stroke="var(--accent)" strokeDasharray="6 3" label={{ value: `Đích ${fmtNum(goalWeight)}`, fill: 'var(--accent)', fontSize: 11, position: 'insideBottomRight' }} />
-                <Line type="monotone" dataKey="weightKg" name="weightKg" stroke="var(--faint)" strokeWidth={1.5} dot={{ r: 2.5, fill: 'var(--faint)' }} isAnimationActive={false} />
-                <Line type="monotone" dataKey="ma7" name="ma7" stroke="var(--accent)" strokeWidth={3} dot={false} isAnimationActive={false} />
+                <ReferenceLine y={startWeight} stroke="var(--faint)" strokeDasharray="3 4" label={{ value: `Bắt đầu ${fmtNum(startWeight)}`, fill: 'var(--muted)', fontSize: 11, position: 'insideTopLeft' }} />
+                <ReferenceLine y={goalWeight} stroke="var(--go)" strokeDasharray="5 4" label={{ value: `Đích ${fmtNum(goalWeight)}`, fill: 'var(--go)', fontSize: 11, position: 'insideBottomLeft' }} />
+                <Line type="monotone" dataKey="weightKg" name="weightKg" stroke="var(--faint)" strokeWidth={0} dot={{ r: 2.5, fill: 'var(--faint)', strokeWidth: 0 }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="ma7" name="ma7" stroke="var(--go)" strokeWidth={3} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
-        <div className="flex gap-4 text-xs text-muted mt-1">
-          <span className="flex items-center gap-1.5"><i className="inline-block w-4 h-[3px] rounded bg-accent" /> TB trượt 7 ngày</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block w-2 h-2 rounded-full bg-faint" /> Cân thực tế</span>
+        <div className="flex gap-4 text-[13px] text-muted mt-1">
+          <span className="flex items-center gap-1.5">
+            <i className="inline-block w-4 h-[3px] rounded" style={{ background: 'var(--go)' }} /> Trung bình 7 ngày
+          </span>
+          <span className="flex items-center gap-1.5">
+            <i className="inline-block w-2 h-2 rounded-full bg-faint" /> Cân thực tế
+          </span>
         </div>
       </Card>
 
       {all.length > 0 && (
-        <Card>
-          <SectionTitle>Số đo gần đây</SectionTitle>
-          <ul className="divide-y divide-line -my-1">
-            {[...withMA].reverse().slice(0, 14).map((e, i, arr) => {
-              const prev = arr[i + 1];
-              const diff = prev ? e.weightKg - prev.weightKg : null;
-              return (
-                <li key={e.id} className="flex items-center gap-3 py-1.5 min-h-12">
-                  <span className="w-20 text-sm text-muted">{fmtDate(e.date)}</span>
-                  <span className="flex-1 font-semibold tnum">{fmtNum(e.weightKg)} kg</span>
-                  {diff !== null && (
-                    <span className={`text-xs tnum ${diff <= 0 ? 'text-accent' : 'text-warn'}`}>
-                      {diff > 0 ? '+' : ''}
-                      {fmtNum(diff)}
-                    </span>
-                  )}
-                  <span className="text-xs text-faint tnum w-14 text-right">TB {fmtNum(e.ma7)}</span>
-                  <button
-                    className="h-11 w-11 grid place-items-center text-faint active:text-danger"
-                    onClick={() => confirm(`Xoá số đo ngày ${fmtDate(e.date)}?`) && db.bodyMetrics.delete(e.id)}
-                    aria-label="Xoá"
-                  >
-                    <IconTrash width={18} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+        <>
+          <GroupLabel>Số đo gần đây</GroupLabel>
+          <Card className="!py-0">
+            {[...withMA]
+              .reverse()
+              .slice(0, 14)
+              .map((e, i, arr) => {
+                const prev = arr[i + 1];
+                const diff = prev ? e.weightKg - prev.weightKg : null;
+                return (
+                  <div key={e.id} className="flex items-center gap-3 min-h-[48px] hairline-b last:shadow-none">
+                    <span className="w-20 text-[15px] text-muted">{fmtDate(e.date)}</span>
+                    <span className="flex-1 text-[17px] font-semibold font-rounded tnum">{fmtNum(e.weightKg)} kg</span>
+                    {diff !== null && (
+                      <span className="text-[13px] font-rounded tnum" style={{ color: diff <= 0 ? 'var(--go)' : 'var(--warn)' }}>
+                        {diff > 0 ? '+' : ''}
+                        {fmtNum(diff)}
+                      </span>
+                    )}
+                    <button className="press h-10 w-10 grid place-items-center text-faint" onClick={() => setDel(e)} aria-label="Xoá">
+                      <IconTrash size={18} />
+                    </button>
+                  </div>
+                );
+              })}
+          </Card>
+        </>
       )}
+      <Sheet open={!!del} onClose={() => setDel(null)} title="Xoá số đo?">
+        {del && (
+          <Button
+            variant="danger"
+            className="w-full"
+            onClick={async () => {
+              await db.bodyMetrics.delete(del.id);
+              setDel(null);
+            }}
+          >
+            Xoá {fmtNum(del.weightKg)} kg ngày {fmtDate(del.date)}
+          </Button>
+        )}
+      </Sheet>
     </>
   );
 }
 
-function Stat({ label, value, unit, accent }) {
+function Stat({ label, value, color }) {
   return (
-    <div className="rounded-xl bg-surface-2 py-2.5">
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className={`text-xl font-bold tnum ${accent ? 'text-accent' : ''}`}>
-        {value}
-        <span className="text-xs font-normal text-muted"> {unit}</span>
+    <div>
+      <div className="text-[13px] text-muted">{label}</div>
+      <div className="font-rounded tnum leading-tight" style={{ color }}>
+        <span className="text-[22px] font-bold tracking-[-0.02em]">{value}</span>
+        <span className="text-[13px] text-muted"> kg</span>
       </div>
     </div>
   );
@@ -223,68 +241,69 @@ function PhotoSection({ showToast }) {
   };
 
   return (
-    <Card>
-      <SectionTitle
+    <>
+      <GroupLabel
         right={
           photos.length >= 2 && (
-            <button className="text-sm font-semibold text-accent min-h-10 px-2" onClick={() => setCompare(true)}>
+            <button className="text-[15px] text-accent font-medium" onClick={() => setCompare(true)}>
               So sánh
             </button>
           )
         }
       >
         Ảnh check-in buổi sáng
-      </SectionTitle>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
-      <Button variant={hasToday ? 'outline' : 'primary'} className="w-full h-14 flex items-center justify-center gap-2" onClick={() => fileRef.current.click()} disabled={busy}>
-        <IconCamera width={22} />
-        {busy ? 'Đang nén ảnh…' : hasToday ? 'Chụp lại ảnh hôm nay' : 'Chụp / tải ảnh hôm nay'}
-      </Button>
-      <p className="text-xs text-faint mt-2">Mỗi ngày 1 ảnh, nén tại máy trước khi lưu. Ảnh không rời khỏi điện thoại.</p>
+      </GroupLabel>
+      <Card>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+        <Button variant={hasToday ? 'ghost' : 'primary'} className="w-full flex items-center justify-center gap-2" onClick={() => fileRef.current.click()} disabled={busy}>
+          <IconCamera size={22} />
+          {busy ? 'Đang nén ảnh…' : hasToday ? 'Chụp lại ảnh hôm nay' : 'Chụp / chọn ảnh hôm nay'}
+        </Button>
+        <p className="text-[13px] text-muted mt-2">Mỗi ngày 1 ảnh, nén ngay trên máy. Ảnh không rời khỏi điện thoại.</p>
 
-      {photos.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          {photos.map((p) => (
-            <Thumb key={p.id} photo={p} onClick={() => setView(p)} />
-          ))}
-        </div>
-      )}
+        {photos.length > 0 && (
+          <div className="grid grid-cols-3 gap-1.5 mt-3">
+            {photos.map((p) => (
+              <Thumb key={p.id} photo={p} onClick={() => setView(p)} />
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Sheet open={!!view} onClose={() => setView(null)} title={view ? fmtDate(view.date, false) : ''}>
         {view && <FullPhoto blob={view.imageBlob} />}
         <Button
-          variant="outline"
-          className="w-full mt-3 text-danger"
+          variant="destructive"
+          className="w-full mt-3"
           onClick={async () => {
-            if (!confirm('Xoá ảnh này?')) return;
             await db.checkinPhotos.delete(view.id);
             setView(null);
           }}
         >
-          Xoá ảnh
+          Xoá ảnh này
         </Button>
       </Sheet>
 
-      <Sheet open={compare} onClose={() => setCompare(false)} title="So sánh Before / After">
+      <Sheet open={compare} onClose={() => setCompare(false)} title="Trước & sau">
         {compare && <Compare photos={photos} />}
       </Sheet>
-    </Card>
+    </>
   );
 }
 
 function Thumb({ photo, onClick }) {
   const url = useObjectURL(photo.thumbBlob || photo.imageBlob);
   return (
-    <button onClick={onClick} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-surface-2">
+    <button onClick={onClick} className="press relative aspect-[3/4] rounded-[12px] overflow-hidden bg-surface-2">
       {url && <img src={url} alt={photo.date} className="absolute inset-0 w-full h-full object-cover" />}
-      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[11px] font-semibold py-1 tnum">{fmtShort(photo.date)}</span>
+      <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/55 text-white text-[11px] font-semibold px-2 py-0.5 font-rounded tnum">{fmtShort(photo.date)}</span>
     </button>
   );
 }
 
 function FullPhoto({ blob, className = '' }) {
   const url = useObjectURL(blob);
-  return url ? <img src={url} alt="" className={`w-full rounded-xl object-contain bg-black ${className}`} /> : <div className="aspect-[3/4] bg-surface-2 rounded-xl" />;
+  return url ? <img src={url} alt="" className={`w-full rounded-[14px] object-contain bg-black ${className}`} /> : <div className="aspect-[3/4] bg-surface-2 rounded-[14px]" />;
 }
 
 function Compare({ photos }) {
@@ -294,32 +313,29 @@ function Compare({ photos }) {
   const pa = sorted.find((p) => p.id === +a);
   const pb = sorted.find((p) => p.id === +b);
   const days = pa && pb ? Math.round((new Date(pb.date) - new Date(pa.date)) / 86400000) : 0;
-  const select = (value, onChange) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full h-12 rounded-xl bg-surface-2 px-2 font-semibold">
-      {sorted.map((p) => (
-        <option key={p.id} value={p.id}>
-          {fmtDate(p.date, false)}
-        </option>
-      ))}
-    </select>
+  const select = (value, onChange, label) => (
+    <label className="block">
+      <span className="block text-[13px] text-muted mb-1">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full h-11 rounded-[12px] bg-surface px-3 font-semibold">
+        {sorted.map((p) => (
+          <option key={p.id} value={p.id}>
+            {fmtDate(p.date, false)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
   return (
     <div>
       <div className="grid grid-cols-2 gap-2">
-        <div>
-          <div className="text-xs font-semibold text-muted mb-1">TRƯỚC</div>
-          {select(a, setA)}
-        </div>
-        <div>
-          <div className="text-xs font-semibold text-muted mb-1">SAU</div>
-          {select(b, setB)}
-        </div>
+        {select(a, setA, 'Trước')}
+        {select(b, setB, 'Sau')}
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3">
         {pa && <FullPhoto blob={pa.imageBlob} className="aspect-[3/4] object-cover" />}
         {pb && <FullPhoto blob={pb.imageBlob} className="aspect-[3/4] object-cover" />}
       </div>
-      <p className="text-center text-sm text-muted mt-2 tnum">Cách nhau {Math.abs(days)} ngày</p>
+      <p className="text-center text-[15px] text-muted mt-2 font-rounded tnum">Cách nhau {Math.abs(days)} ngày</p>
     </div>
   );
 }

@@ -56,9 +56,9 @@ export async function exportJSON(settings) {
       tables[t] = rows;
     }
   }
-  const payload = { app: 'linhs-fitness-tracker', schemaVersion: 1, exportedAt: new Date().toISOString(), settings, tables };
+  const payload = { app: 'baki-goal', schemaVersion: 1, exportedAt: new Date().toISOString(), settings, tables };
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-  await saveFile(blob, `fitness-backup-${todayStr()}.json`);
+  await saveFile(blob, `baki-goal-backup-${todayStr()}.json`);
 }
 
 export async function readBackupFile(file) {
@@ -69,7 +69,7 @@ export async function readBackupFile(file) {
   } catch {
     throw new Error('File không phải JSON hợp lệ.');
   }
-  if (!['linhs-fitness-tracker', 'shuru-tracker'].includes(data?.app) || !data.tables) throw new Error("Đây không phải file sao lưu của Linh's Fitness Tracker.");
+  if (!['baki-goal', 'linhs-fitness-tracker', 'shuru-tracker'].includes(data?.app) || !data.tables) throw new Error("Đây không phải file sao lưu của Baki Goal.");
   const counts = Object.fromEntries(TABLES.map((t) => [t, data.tables[t]?.length || 0]));
   return { data, counts };
 }
@@ -129,14 +129,14 @@ export async function exportWorkoutCSV() {
     ];
   });
   const csv = toCSV(['Ngày', 'Day', 'Nhóm cơ', 'Bài tập', 'Set', 'Tạ (kg)', 'Reps', 'Volume (kg)', 'Ghi chú'], rows);
-  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `fitness-lich-su-tap-${todayStr()}.csv`);
+  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `baki-goal-lich-su-tap-${todayStr()}.csv`);
 }
 
 export async function exportWeightCSV() {
   const entries = movingAverage7(await db.bodyMetrics.toArray());
   const rows = entries.map((e) => [e.date, e.weightKg, e.ma7, e.note || '']);
   const csv = toCSV(['Ngày', 'Cân nặng (kg)', 'TB trượt 7 ngày (kg)', 'Ghi chú'], rows);
-  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `fitness-can-nang-${todayStr()}.csv`);
+  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `baki-goal-can-nang-${todayStr()}.csv`);
 }
 
 export async function exportNutritionCSV() {
@@ -155,7 +155,7 @@ export async function exportNutritionCSV() {
     .sort()
     .map((d) => [d, r1(byDate[d].p), r1(byDate[d].f), r1(byDate[d].c), Math.round(byDate[d].k), byDate[d].n]);
   const csv = toCSV(['Ngày', 'Protein (g)', 'Fat (g)', 'Carbs (g)', 'Kcal', 'Số món'], rows);
-  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `fitness-dinh-duong-${todayStr()}.csv`);
+  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `baki-goal-dinh-duong-${todayStr()}.csv`);
 }
 
 export async function resetDB() {
