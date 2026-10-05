@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_SETTINGS, macroTargets, pickSettings, useSettings } from '../lib/store';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../lib/db';
+import { ACTIVITY_LEVELS, DEFAULT_SETTINGS, calcTDEE, macroTargets, pickSettings, useSettings } from '../lib/store';
 import { exportJSON, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
 import { Button, Card, NumField, SectionTitle, Segmented, Sheet, TextField, useToast } from '../components/ui';
 
@@ -67,7 +69,7 @@ export default function Settings() {
         <div className="divide-y divide-line">
           {Row({ label: 'Protein tối thiểu', k: 'proteinMin', unit: 'g' })}
           {Row({ label: 'Protein tối đa', k: 'proteinMax', unit: 'g' })}
-          {Row({ label: 'Trần Fat', k: 'fatCap', unit: 'g', hint: 'Thanh Fat chuyển đỏ khi vượt' })}
+          {Row({ label: 'Trần Fat', k: 'fatCap', unit: 'g', hint: `Khuyến nghị dài hạn ≥ 0,5 g/kg ≈ ${Math.round(s.startWeight * 0.5)}g` })}
           {Row({ label: 'Kcal duy trì (TDEE)', k: 'maintenanceKcal', unit: 'kcal', hint: 'Ước lượng năng lượng tiêu hao/ngày' })}
           {Row({ label: 'Mức thâm hụt', k: 'deficitKcal', unit: 'kcal', hint: '≈500 kcal/ngày ≈ 0,5 kg/tuần' })}
         </div>
@@ -77,6 +79,7 @@ export default function Settings() {
         </div>
       </Card>
 
+      <TdeeCard showToast={showToast} />
       <BackupCard showToast={showToast} />
       <StorageCard />
       {toast}
@@ -294,6 +297,79 @@ function StorageCard() {
         </Button>
       )}
       <p className="text-xs text-faint mt-3">Linh's Fitness Tracker v1.0 · 100% local-first, không máy chủ.</p>
+    </Card>
+  );
+}
+
+function TdeeCard({ showToast }) {
+  const s = useSettings();
+  const latest = useLiveQuery(() => db.bodyMetrics.orderBy('date').last(), []);
+  const weightKg = latest?.weightKg ?? s.startWeight;
+  const res = calcTDEE({ sex: s.sex, age: s.age, heightCm: s.heightCm, weightKg, activity: s.activity });
+  return (
+    <Card>
+      <SectionTitle>Tính Kcal duy trì (TDEE)</SectionTitle>
+      <div className="space-y-3">
+        <Segmented
+          value={s.sex}
+          onChange={(v) => s.update({ sex: v })}
+          options={[
+            { value: 'male', label: 'Nam' },
+            { value: 'female', label: 'Nữ' },
+          ]}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="block text-xs text-muted mb-1">Tuổi</span>
+            <NumField value={s.age} decimal={false} placeholder="tuổi" onCommit={(v) => s.update({ age: v })} />
+          </label>
+          <label className="block">
+            <span className="block text-xs text-muted mb-1">Chiều cao (cm)</span>
+            <NumField value={s.heightCm} decimal={false} placeholder="cm" onCommit={(v) => s.update({ heightCm: v })} />
+          </label>
+        </div>
+        <div>
+          <span className="block text-xs text-muted mb-1">Mức vận động</span>
+          <div className="grid grid-cols-2 gap-2">
+            {ACTIVITY_LEVELS.map((a) => (
+              <button
+                key={a.value}
+                onClick={() => s.update({ activity: a.value })}
+                className={`min-h-14 rounded-xl px-3 py-2 text-left border ${s.activity === a.value ? 'border-accent bg-accent/10' : 'border-line bg-surface-2'}`}
+              >
+                <span className="block text-sm font-semibold">{a.label} ×{a.value}</span>
+                <span className="block text-[11px] text-muted leading-tight">{a.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {res ? (
+          <div className="rounded-xl bg-surface-2 p-3 text-sm tnum">
+            <div>
+              Cân nặng dùng để tính: <b>{weightKg} kg</b> {latest ? '(số đo gần nhất)' : '(cân bắt đầu)'}
+            </div>
+            <div>
+              BMR: <b>{res.bmr} kcal</b> · TDEE ước tính: <b className="text-accent">{res.tdee.toLocaleString('vi-VN')} kcal</b>
+            </div>
+            <Button
+              variant="primary"
+              className="w-full mt-2"
+              disabled={s.maintenanceKcal === res.tdee}
+              onClick={() => {
+                s.update({ maintenanceKcal: res.tdee });
+                showToast(`Kcal duy trì = ${res.tdee}`);
+              }}
+            >
+              {s.maintenanceKcal === res.tdee ? 'Đang dùng mức này' : 'Dùng làm Kcal duy trì'}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-faint">Nhập tuổi và chiều cao để tính.</p>
+        )}
+        <p className="text-xs text-faint">
+          Công thức Mifflin–St Jeor. Đây là ước tính ban đầu: sau 2–3 tuần, nếu đường trung bình 7 ngày giảm chậm hơn ~0,4 kg/tuần thì hạ Kcal duy trì xuống 100–150.
+        </p>
+      </div>
     </Card>
   );
 }

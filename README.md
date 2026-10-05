@@ -49,6 +49,15 @@ Sau lần mở đầu tiên có mạng, app chạy hoàn toàn offline (kể c�
 - Đổi tên miền host = kho dữ liệu mới. Khi chuyển host, sao lưu JSON ở bản cũ rồi khôi phục ở bản mới.
 - iPhone không cho web app rung máy (Vibration API); khi hết giờ nghỉ app phát âm báo. Hãy tắt chế độ im lặng nếu muốn nghe.
 
+## Dinh dưỡng trong app
+
+- **Kho món** (tab PFC → Thêm món): ~80 thực phẩm và món Việt có P/F/C theo khẩu phần, tìm không cần gõ dấu, chọn ×0.5–×2. Món nhiều Fat (≥10g/phần) có nhãn cảnh báo. Nguồn: USDA FoodData Central, Bảng thành phần thực phẩm Việt Nam, NutriHome; món nhà nấu là ước tính.
+- **Thực đơn mẫu A–D**: ~1.900 kcal, Protein ~150g, Fat 22–26g, chia theo lịch tập 6:00 sáng. Thêm từng bữa hoặc cả ngày bằng 1 chạm.
+- **Tính TDEE** (Cài đặt): công thức Mifflin–St Jeor theo tuổi, chiều cao, cân nặng gần nhất và mức vận động.
+- **Hướng dẫn dinh dưỡng**: tóm tắt khuyến nghị protein, fat, tốc độ giảm cân kèm nguồn.
+
+Dữ liệu món ăn nằm trong `src/lib/foods.js`, thực đơn trong `src/lib/mealplans.js`.
+
 ## Cấu trúc mã
 
 ```

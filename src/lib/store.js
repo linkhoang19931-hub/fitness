@@ -13,6 +13,10 @@ export const DEFAULT_SETTINGS = {
   fatCap: 30,
   maintenanceKcal: 2400,
   deficitKcal: 500,
+  sex: 'male',
+  age: null,
+  heightCm: null,
+  activity: 1.55,
 };
 
 // Cấu hình người dùng — lưu LocalStorage qua Zustand persist (URD 2.1)
@@ -37,6 +41,20 @@ export function macroTargets(s) {
   const carbs = Math.max(0, Math.round((kcal - s.proteinMax * 4 - s.fatCap * 9) / 4));
   return { kcal, carbs, proteinMin: s.proteinMin, proteinMax: s.proteinMax, fatCap: s.fatCap };
 }
+
+// TDEE theo công thức Mifflin–St Jeor × hệ số vận động
+export function calcTDEE({ sex, age, heightCm, weightKg, activity }) {
+  if (!age || !heightCm || !weightKg) return null;
+  const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + (sex === 'female' ? -161 : 5);
+  return { bmr: Math.round(bmr), tdee: Math.round((bmr * activity) / 10) * 10 };
+}
+
+export const ACTIVITY_LEVELS = [
+  { value: 1.2, label: 'Ít vận động', hint: 'Ngồi văn phòng, không tập' },
+  { value: 1.375, label: 'Nhẹ', hint: 'Tập 1–3 buổi/tuần' },
+  { value: 1.55, label: 'Vừa', hint: 'Tập 4–6 buổi/tuần, việc văn phòng' },
+  { value: 1.725, label: 'Nhiều', hint: 'Tập nặng 6–7 buổi/tuần hoặc việc chân tay' },
+];
 
 // Trạng thái phiên (không lưu): bộ đếm nghỉ
 export const useRest = create((set) => ({
