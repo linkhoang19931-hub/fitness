@@ -37,6 +37,13 @@ export const useSettings = create(
   )
 );
 
+// Bản nháp cài đặt: chỉnh xong mới bấm "Lưu cài đặt" (giữ nguyên khi chuyển tab)
+export const useDraft = create((set) => ({
+  draft: null,
+  setDraft: (patch) => set((st) => ({ draft: { ...(st.draft || {}), ...patch } })),
+  clear: () => set({ draft: null }),
+}));
+
 export const pickSettings = (s) => Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map((k) => [k, s[k]]));
 
 export const LOSS_RATES = [

@@ -55,9 +55,19 @@ Thiết kế theo phong cách iOS: tiêu đề lớn, thẻ nhóm bo góc, thanh
 
 ## Mục tiêu tự động
 
+Cài đặt chỉnh xong bấm **Lưu cài đặt** mới áp dụng (thanh lưu hiện khi có thay đổi; tab Cài đặt có chấm đỏ nếu còn thay đổi chưa lưu).
+
 Cài đặt → bật "Tự tính mục tiêu": Kcal = TDEE (Mifflin–St Jeor theo tuổi, chiều cao, cân gần nhất, mức vận động) − thâm hụt theo tốc độ giảm (0,25–1 kg/tuần, 7.700 kcal/kg). Protein = g/kg × cân hiện tại. Carbs = phần còn lại sau Protein và trần Fat. Đổi cân mục tiêu để xem ngày dự kiến chạm mốc; đạt mục tiêu thì tự chuyển sang ăn duy trì.
 
+## Tập luyện
+
+- Xong buổi trong ngày: thẻ "Đã xong buổi tập hôm nay" có dấu tick, dải Tuần này đánh dấu ngày đã tập.
+- Chạm tên bài (biểu tượng ⓘ) để xem hướng dẫn: nhóm cơ, set × rep gợi ý, chuẩn bị, các bước, lỗi hay gặp, link video mẫu. Nội dung ở `src/lib/guides.js`.
+- "Bắt đầu lại từ D1" đặt lại chu kỳ mà không xoá dữ liệu; sang tuần mới với chu kỳ dở dang, app hỏi lại từ D1 hay đi tiếp.
+
 ## Dinh dưỡng trong app
+
+- **Gợi ý hôm nay**: chọn sẵn thực đơn theo ngày (ngày tập / ngày nghỉ), chia khẩu phần các bữa còn lại theo phần Kcal và Protein còn thiếu sau những gì đã ăn.
 
 - **Kho món** (tab PFC → Thêm món): hơn 300 thực phẩm và món Việt, Nhật, Hàn, Âu, Trung–Thái, đồ uống có P/F/C theo khẩu phần, tìm không cần gõ dấu, chọn ×0.5–×2. Món nhiều Fat (≥10g/phần) có nhãn cảnh báo. Nguồn: USDA FoodData Central, Bảng thành phần thực phẩm Việt Nam, NutriHome; món nhà nấu là ước tính.
 - **Thực đơn mẫu A–I** (Việt, Nhật, Hàn, Âu, ăn ngoài, ngày nghỉ): khẩu phần tự co giãn theo mục tiêu Kcal/Protein hiện hành. Thêm từng bữa hoặc cả ngày bằng 1 chạm.

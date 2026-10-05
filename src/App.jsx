@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSettings } from './lib/store';
+import { useDraft, useSettings } from './lib/store';
 import Workout from './screens/Workout';
 import Nutrition from './screens/Nutrition';
 import Body from './screens/Body';
@@ -33,6 +33,7 @@ function useTheme(theme) {
 
 export default function App() {
   const theme = useSettings((s) => s.theme);
+  const unsaved = useDraft((d) => !!d.draft && Object.keys(d.draft).length > 0);
   useTheme(theme);
   const [tab, setTab] = useState(() => {
     try {
@@ -83,7 +84,12 @@ export default function App() {
                 className={`h-[56px] flex flex-col items-center justify-center gap-0.5 transition-colors ${on ? 'text-accent' : 'text-faint'}`}
                 aria-current={on ? 'page' : undefined}
               >
-                <Icon size={28} filled={on} />
+                <span className="relative">
+                  <Icon size={28} filled={on} />
+                  {t.id === 'settings' && unsaved && (
+                    <span className="absolute -top-0.5 -right-1 h-2.5 w-2.5 rounded-full" style={{ background: 'var(--danger)' }} aria-label="Có thay đổi chưa lưu" />
+                  )}
+                </span>
                 <span className="text-[10px] font-medium tracking-[0.01em]">{t.label}</span>
               </button>
             );

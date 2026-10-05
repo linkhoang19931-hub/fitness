@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { ACTIVITY_LEVELS, DEFAULT_SETTINGS, LOSS_RATES, pickSettings, useSettings } from '../lib/store';
-import { useTargets } from '../lib/targets';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { ACTIVITY_LEVELS, DEFAULT_SETTINGS, LOSS_RATES, macroTargets, pickSettings, sanitize, useDraft, useSettings } from '../lib/store';
+import { useLatestWeight } from '../lib/targets';
 import { exportJSON, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
 import { Button, Card, GroupLabel, NumField, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
 import { IconFlame } from '../components/Icons';
@@ -19,8 +19,11 @@ function Row({ label, hint, children }) {
   );
 }
 
+// Cài đặt đang chỉnh (bản nháp chồng lên bản đã lưu)
+const Ctx = createContext(null);
+
 function NumRow({ label, hint, k, unit, decimal = false }) {
-  const s = useSettings();
+  const s = useContext(Ctx);
   return (
     <Row label={label} hint={hint}>
       <div className="flex items-center gap-1.5">
@@ -39,13 +42,29 @@ function NumRow({ label, hint, k, unit, decimal = false }) {
 }
 
 export default function Settings() {
-  const s = useSettings();
-  const t = useTargets();
+  const saved = useSettings();
+  const { draft, setDraft, clear } = useDraft();
+  const latestW = useLatestWeight();
   const [toast, showToast] = useToast();
+  const base = pickSettings(saved);
+  const merged = { ...base, ...(draft || {}) };
+  const dirty = !!draft && Object.keys(draft).some((k) => draft[k] !== base[k]);
+  const s = { ...merged, update: setDraft };
+  const t = macroTargets(merged, latestW);
+  const save = () => {
+    // chuẩn hoá số liệu trước khi lưu (giữ null cho tuổi/chiều cao chưa nhập)
+    const clean = sanitize(merged);
+    const patch = {};
+    for (const k of Object.keys(draft || {})) patch[k] = k in clean ? clean[k] : merged[k];
+    saved.update(patch);
+    clear();
+    showToast('Đã lưu cài đặt');
+  };
   const eta = t.weeks ? addDays(todayStr(), Math.ceil(t.weeks * 7)) : null;
 
   return (
-    <div>
+    <Ctx.Provider value={s}>
+    <div className={dirty ? 'pb-20' : ''}>
       {/* Mục tiêu hiện hành — tự cập nhật khi đổi các thông số bên dưới */}
       <Card className="!p-0 overflow-hidden">
         <div className="p-4" style={{ background: 'linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%)' }}>
@@ -193,8 +212,24 @@ export default function Settings() {
 
       <BackupCard showToast={showToast} />
       <StorageCard />
+      {dirty && (
+        <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5">
+          <div className="mx-auto max-w-lg rounded-[22px] material shadow-[0_10px_40px_rgba(0,0,0,0.3)] border border-line/60 p-2.5 flex items-center gap-2">
+            <span className="flex-1 pl-2 text-[13px] text-muted leading-tight">
+              Chưa lưu · mục tiêu mới <b className="text-ink font-rounded tnum">{t.kcal.toLocaleString('vi-VN')} kcal</b>
+            </span>
+            <button className="press h-11 px-4 rounded-full bg-surface-2 text-[15px] font-semibold" onClick={clear}>
+              Huỷ
+            </button>
+            <button className="press h-11 px-5 rounded-full bg-accent text-white text-[15px] font-semibold" onClick={save}>
+              Lưu cài đặt
+            </button>
+          </div>
+        </div>
+      )}
       {toast}
     </div>
+    </Ctx.Provider>
   );
 }
 
@@ -308,6 +343,7 @@ function BackupCard({ showToast }) {
                 run(async () => {
                   const restored = await restoreJSON(pending.data);
                   if (restored) settings.update(restored);
+                  useDraft.getState().clear();
                   setPending(null);
                   setTimeout(() => location.reload(), 600);
                 }, 'Đã khôi phục dữ liệu')
@@ -350,6 +386,7 @@ function BackupCard({ showToast }) {
                 run(async () => {
                   await resetDB();
                   settings.resetSettings();
+                  useDraft.getState().clear();
                   location.reload();
                 })
               }

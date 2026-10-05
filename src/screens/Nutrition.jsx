@@ -8,6 +8,7 @@ import { useToday } from '../lib/useToday';
 import { Button, Card, GroupLabel, MacroBar, NumField, Rings, Segmented, Sheet, TextField, useToast } from '../components/ui';
 import { FOOD_GROUPS, FOODS, SRC_LABEL, normalize, searchFoods } from '../lib/foods';
 import { MEAL_PLANS, itemEntry, kcalOfTotals, planTotals, scalePlan, totals } from '../lib/mealplans';
+import { activeWorkout } from '../lib/workout';
 import { IconBook, IconChevron, IconFlame, IconPlus, IconSearch, IconTrash } from '../components/Icons';
 
 const COLORS = { protein: 'var(--protein)', fat: 'var(--fat)', carbs: 'var(--carbs)' };
@@ -80,6 +81,8 @@ export default function Nutrition() {
       </div>
 
       <Summary sum={sum} t={t} />
+
+      {isToday && <TodayPlan date={date} sum={sum} t={t} onPickMany={addMany} />}
 
       <GroupLabel>Thêm món</GroupLabel>
       <AddFood presets={presets} onPick={addEntry} onPickMany={addMany} targets={t} />
@@ -202,6 +205,161 @@ function Legend({ label, color, value, target, alert }) {
         <span className="text-[22px] font-bold tracking-[-0.02em]">{Math.round(value)}</span>
         <span className="text-[13px] text-muted"> / {target} g</span>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Gợi ý thực đơn hôm nay, tính theo mục tiêu và lượng đã ăn ---------- */
+const TRAIN_PLANS = MEAL_PLANS.filter((p) => p.id !== 'I').map((p) => p.id);
+const REST_PLANS = ['I'];
+const ls = {
+  get: (k, d) => {
+    try {
+      const v = localStorage.getItem(k);
+      return v == null ? d : JSON.parse(v);
+    } catch {
+      return d;
+    }
+  },
+  set: (k, v) => {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {}
+  },
+};
+const toMin = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+function TodayPlan({ date, sum, t, onPickMany }) {
+  const trainedToday = useLiveQuery(async () => {
+    const done = await db.workouts.where('date').equals(date).filter((w) => !!w.completedAt).count();
+    return done > 0 || !!(await activeWorkout());
+  }, [date]);
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // Ngày tập: đã/đang tập hôm nay hoặc còn sớm (trước 9h). Ngày nghỉ: quá 9h mà chưa tập.
+  const autoMode = trainedToday || nowMin < 9 * 60 ? 'train' : 'rest';
+  const [mode, setMode] = useState(() => ls.get(`plan-mode-${date}`, null));
+  const dayMode = mode || autoMode;
+  const pool = dayMode === 'rest' ? REST_PLANS : TRAIN_PLANS;
+  const seed = Math.floor(new Date(date + 'T00:00:00').getTime() / 86400000);
+  const [planId, setPlanId] = useState(() => ls.get(`plan-id-${date}`, null));
+  const id = planId && pool.includes(planId) ? planId : pool[seed % pool.length];
+  const plan = MEAL_PLANS.find((p) => p.id === id);
+  const [added, setAdded] = useState(() => ls.get(`plan-added-${date}`, []));
+
+  const remaining = plan.meals.filter((m) => !added.includes(`${id}:${m.name}`));
+  const remKcal = Math.round(t.kcal - sum.k);
+  const remP = Math.max(0, t.proteinMid - sum.p);
+  const fitted = remaining.length && remKcal > 150 ? scalePlan({ ...plan, meals: remaining }, { kcal: remKcal, proteinMid: remP }) : null;
+  const next = fitted ? fitted.meals.find((m) => toMin(m.time) >= nowMin - 60) || fitted.meals[0] : null;
+  const later = fitted ? fitted.meals.filter((m) => m !== next) : [];
+
+  const cycle = () => {
+    const i = pool.indexOf(id);
+    const nid = pool[(i + 1) % pool.length];
+    setPlanId(nid);
+    ls.set(`plan-id-${date}`, nid);
+  };
+  const switchMode = (m) => {
+    setMode(m);
+    ls.set(`plan-mode-${date}`, m);
+  };
+  const addMeal = async (m) => {
+    await onPickMany(m.items.map(itemEntry), `bữa ${m.name.toLowerCase()}`);
+    const n = [...added, `${id}:${m.name}`];
+    setAdded(n);
+    ls.set(`plan-added-${date}`, n);
+  };
+
+  return (
+    <>
+      <GroupLabel
+        right={
+          <button className="text-[15px] text-accent font-medium" onClick={cycle} disabled={pool.length < 2}>
+            {pool.length > 1 ? 'Đổi thực đơn' : ''}
+          </button>
+        }
+      >
+        Gợi ý hôm nay
+      </GroupLabel>
+      <Card>
+        <div className="flex items-center gap-3">
+          <span className="h-10 w-10 rounded-[11px] grid place-items-center text-[17px] font-bold font-rounded text-white" style={{ background: 'var(--accent)' }}>
+            {plan.id}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold leading-tight">{plan.name}</div>
+            <div className="text-[13px] text-muted">Theo mục tiêu {t.kcal.toLocaleString('vi-VN')} kcal · P ~{t.proteinMid}g · F ≤{t.fatCap}g</div>
+          </div>
+        </div>
+        <div className="mt-3">
+          <Segmented
+            value={dayMode}
+            onChange={switchMode}
+            options={[
+              { value: 'train', label: 'Ngày tập' },
+              { value: 'rest', label: 'Ngày nghỉ' },
+            ]}
+          />
+        </div>
+
+        {!fitted ? (
+          <p className="text-[15px] mt-3" style={{ color: 'var(--go)' }}>
+            {remKcal <= 150 ? 'Bạn đã ăn đủ năng lượng cho hôm nay.' : 'Đã thêm hết các bữa của thực đơn này.'}
+            {sum.p < t.proteinMin && ` Còn thiếu ${Math.round(t.proteinMin - sum.p)}g protein: thêm 1 muỗng whey hoặc lòng trắng trứng.`}
+          </p>
+        ) : (
+          <>
+            <MealBlock meal={next} highlight onAdd={() => addMeal(next)} />
+            {later.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {later.map((m) => (
+                  <MealBlock key={m.name} meal={m} onAdd={() => addMeal(m)} />
+                ))}
+              </div>
+            )}
+            <p className="text-[13px] text-muted mt-3">
+              Khẩu phần các bữa còn lại đã chia theo phần còn thiếu: {remKcal.toLocaleString('vi-VN')} kcal, {Math.round(remP)}g protein
+              {sum.f > t.fatCap ? '. Đã vượt trần Fat: chọn món luộc, hấp, bỏ dầu.' : `, còn ${fmtNum(Math.max(0, t.fatCap - sum.f))}g fat.`}
+            </p>
+          </>
+        )}
+      </Card>
+    </>
+  );
+}
+
+function MealBlock({ meal, highlight, onAdd }) {
+  const mt = totals(meal.items);
+  return (
+    <div className={`rounded-[14px] p-3 ${highlight ? 'mt-3' : ''}`} style={{ background: highlight ? 'color-mix(in srgb, var(--accent) 12%, var(--surface-2))' : 'var(--surface-2)' }}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[13px] font-semibold font-rounded tnum text-muted w-11">{meal.time}</span>
+        <span className="flex-1 font-semibold">
+          {highlight && <span className="text-accent">Bữa tiếp theo · </span>}
+          {meal.name}
+        </span>
+        <span className="text-[13px] font-semibold font-rounded tnum">{kcalOfTotals(mt)} kcal</span>
+      </div>
+      <ul className="mt-1 pl-[3.25rem] text-[15px] space-y-0.5">
+        {meal.items.map((it) => (
+          <li key={it[0]} className="leading-snug">
+            {itemEntry(it).name}
+          </li>
+        ))}
+      </ul>
+      <div className="pl-[3.25rem] mt-1">
+        <MacroLine p={mt.protein} f={mt.fat} c={mt.carbs} />
+      </div>
+      <button
+        className={`press mt-2 w-full min-h-10 rounded-[10px] text-[15px] font-semibold flex items-center justify-center gap-1.5 ${highlight ? 'bg-accent text-white' : 'bg-surface text-accent'}`}
+        onClick={onAdd}
+      >
+        <IconPlus size={16} /> Đã ăn bữa này
+      </button>
     </div>
   );
 }
