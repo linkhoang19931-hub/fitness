@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { ACTIVITY_LEVELS, DEFAULT_SETTINGS, LOSS_RATES, macroTargets, pickSettings, sanitize, useDraft, useSettings } from '../lib/store';
+import { DEFAULT_SETTINGS, LOSS_RATES, macroTargets, pickSettings, sanitize, useDraft, useSettings } from '../lib/store';
 import { useLatestWeight } from '../lib/targets';
 import { exportJSON, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
 import { Button, Card, GroupLabel, NumField, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
 import { IconFlame } from '../components/Icons';
+import { DAY_COLORS, JOBS, TRAINING_DAYS, getProgram } from '../lib/program';
 import { fmtNum, todayStr, addDays, fmtDate } from '../lib/utils';
 
 // Một hàng cài đặt kiểu iOS: nhãn bên trái, điều khiển bên phải
@@ -56,6 +57,10 @@ export default function Settings() {
     const clean = sanitize(merged);
     const patch = {};
     for (const k of Object.keys(draft || {})) patch[k] = k in clean ? clean[k] : merged[k];
+    // đổi chương trình (giới tính / số buổi) thì chu kỳ bắt đầu lại từ D1
+    if (('sex' in patch && patch.sex !== base.sex) || ('trainingDays' in patch && +patch.trainingDays !== +base.trainingDays)) {
+      patch.cycleStartAt = Date.now();
+    }
     saved.update(patch);
     clear();
     showToast('Đã lưu cài đặt');
@@ -87,6 +92,7 @@ export default function Settings() {
                 ? ` Dự kiến chạm ${fmtNum(s.goalWeight)} kg khoảng ${fmtDate(eta, false)} (~${Math.ceil(t.weeks)} tuần).`
                 : ''}
             {t.floorHit && ' Thâm hụt đã được giới hạn để Kcal không thấp hơn mức chuyển hoá cơ bản.'}
+            {s.fatCap < t.fatMin && ` Trần Fat ${s.fatCap}g đang thấp hơn mức khuyến nghị dài hạn ~${t.fatMin}g.`}
           </p>
         </div>
       </Card>
@@ -116,13 +122,18 @@ export default function Settings() {
         </div>
       </Card>
 
-      <GroupLabel>Hồ sơ cơ thể · để tính TDEE</GroupLabel>
+      <GroupLabel>Hồ sơ & lịch tập</GroupLabel>
       <Card className="!py-0">
-        <Row label="Giới tính">
+        <Row label="Giới tính" hint="Đổi chương trình tập và cách tính dinh dưỡng">
           <div className="w-[140px]">
             <Segmented
               value={s.sex}
-              onChange={(v) => s.update({ sex: v })}
+              onChange={(v) => {
+                const patch = { sex: v };
+                // đổi mặc định protein theo giới nếu người dùng chưa tự chỉnh
+                if (+s.proteinPerKg === (v === 'female' ? 2 : 1.8)) patch.proteinPerKg = v === 'female' ? 1.8 : 2;
+                s.update(patch);
+              }}
               options={[
                 { value: 'male', label: 'Nam' },
                 { value: 'female', label: 'Nữ' },
@@ -132,21 +143,37 @@ export default function Settings() {
         </Row>
         <NumRow label="Tuổi" k="age" unit="tuổi" />
         <NumRow label="Chiều cao" k="heightCm" unit="cm" />
-        <div className="py-3">
-          <div className="text-[17px] mb-2">Mức vận động</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {ACTIVITY_LEVELS.map((a) => {
-              const on = s.activity === a.value;
+        <div className="py-3 hairline-b">
+          <div className="text-[17px]">Công việc hằng ngày</div>
+          <div className="grid grid-cols-3 gap-1.5 mt-2">
+            {JOBS.map((j) => {
+              const on = s.job === j.value;
               return (
-                <button key={a.value} onClick={() => s.update({ activity: a.value })} className={`press rounded-[12px] px-3 py-2 text-left ${on ? 'bg-accent text-white' : 'bg-surface-2'}`}>
-                  <span className="block text-[15px] font-semibold">
-                    {a.label} ×{a.value}
-                  </span>
-                  <span className={`block text-[12px] leading-tight ${on ? 'text-white/80' : 'text-muted'}`}>{a.hint}</span>
+                <button key={j.value} onClick={() => s.update({ job: j.value })} className={`press rounded-[12px] px-2.5 py-2 text-left ${on ? 'bg-accent text-white' : 'bg-surface-2'}`}>
+                  <span className="block text-[14px] font-semibold leading-tight">{j.label}</span>
+                  <span className={`block text-[11px] leading-tight mt-0.5 ${on ? 'text-white/80' : 'text-muted'}`}>{j.hint}</span>
                 </button>
               );
             })}
           </div>
+        </div>
+        <div className="py-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[17px]">Số buổi tập mỗi tuần</span>
+            <span className="text-[13px] text-muted font-rounded tnum">hệ số vận động ×{sanitize(s).activity}</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5 mt-2">
+            {TRAINING_DAYS.map((d) => {
+              const on = +s.trainingDays === d;
+              return (
+                <button key={d} onClick={() => s.update({ trainingDays: d })} className={`press rounded-[12px] py-2 ${on ? 'bg-accent text-white' : 'bg-surface-2'}`}>
+                  <span className="block text-[20px] font-bold font-rounded tnum leading-none">{d}</span>
+                  <span className={`block text-[11px] mt-1 ${on ? 'text-white/80' : 'text-muted'}`}>{d === 7 ? 'cả tuần' : 'buổi'}</span>
+                </button>
+              );
+            })}
+          </div>
+          <ProgramPreview program={getProgram(s.sex, s.trainingDays)} />
           {!t.tdeeFromProfile && s.autoTargets && (
             <p className="text-[13px] mt-2" style={{ color: 'var(--warn)' }}>
               Chưa đủ tuổi và chiều cao nên đang tạm dùng TDEE nhập tay ({s.maintenanceKcal.toLocaleString('vi-VN')} kcal).
@@ -161,7 +188,7 @@ export default function Settings() {
           <Switch checked={s.autoTargets} onChange={(v) => s.update({ autoTargets: v })} label="Tự tính mục tiêu" />
         </Row>
         {s.autoTargets ? (
-          <NumRow label="Protein mỗi kg cân nặng" hint={`= ${t.proteinMin}–${t.proteinMax} g/ngày · khuyến nghị 1,8–2,2`} k="proteinPerKg" unit="g/kg" decimal />
+          <NumRow label="Protein mỗi kg cân nặng" hint={`= ${t.proteinMin}–${t.proteinMax} g/ngày · khuyến nghị ${s.sex === 'female' ? '1,6–2,0' : '1,8–2,2'}`} k="proteinPerKg" unit="g/kg" decimal />
         ) : (
           <>
             <NumRow label="Kcal duy trì (TDEE)" k="maintenanceKcal" unit="kcal" />
@@ -170,7 +197,7 @@ export default function Settings() {
             <NumRow label="Protein tối đa" k="proteinMax" unit="g" />
           </>
         )}
-        <NumRow label="Trần Fat" hint={`Khuyến nghị dài hạn ≥ 0,5 g/kg ≈ ${Math.round(t.weight * 0.5)} g`} k="fatCap" unit="g" />
+        <NumRow label="Trần Fat" hint={`Khuyến nghị dài hạn ≥ ${t.fatMin} g${s.sex === 'female' ? ' (≥ 0,5 g/kg và ≥ 20% năng lượng)' : ' (0,5 g/kg)'}`} k="fatCap" unit="g" />
         {s.autoTargets && <NumRow label="TDEE dự phòng" hint="Dùng khi chưa nhập tuổi, chiều cao" k="maintenanceKcal" unit="kcal" />}
       </Card>
 
@@ -230,6 +257,37 @@ export default function Settings() {
       {toast}
     </div>
     </Ctx.Provider>
+  );
+}
+
+// Xem nhanh chương trình tương ứng với giới tính + số buổi đang chọn
+function ProgramPreview({ program }) {
+  return (
+    <div className="mt-3 rounded-[14px] bg-surface-2 p-3">
+      <div className="text-[13px] font-semibold">
+        Chương trình {program.sex === 'female' ? 'nữ' : 'nam'} · {program.split}
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {program.list.map((d) => (
+          <div key={d.dayIndex} className="flex items-center gap-2.5">
+            <span
+              className="h-6 w-7 shrink-0 rounded-[7px] grid place-items-center text-[11px] font-bold font-rounded text-white"
+              style={{ background: DAY_COLORS[d.dayIndex] }}
+            >
+              D{d.dayIndex}
+            </span>
+            <span className="text-[14px] font-medium">{d.muscle}</span>
+            <span className="text-[12px] text-muted truncate">{d.exercises.length} bài · {d.focus}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[12px] text-muted mt-2">
+        {program.days <= 5 ? 'Mỗi nhóm cơ được tập khoảng 2 lần/tuần. ' : ''}
+        {program.days === 7 ? 'Ngày thứ 7 là hồi phục chủ động (đi bộ dốc, giãn cơ). ' : ''}
+        {program.sex === 'female' ? 'Nam và nữ tăng cơ tương đối như nhau; chương trình nữ ưu tiên mông, chân, cơ lõi theo mục tiêu phổ biến. ' : ''}
+        Đổi chương trình thì chu kỳ bắt đầu lại từ D1; lịch sử và số tạ lần trước của từng bài vẫn giữ.
+      </p>
+    </div>
   );
 }
 

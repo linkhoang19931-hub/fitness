@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { activityFactor } from './program';
 
 export const DEFAULT_SETTINGS = {
   theme: 'dark',
@@ -16,7 +17,9 @@ export const DEFAULT_SETTINGS = {
   sex: 'male',
   age: null,
   heightCm: null,
-  activity: 1.55,
+  activity: 1.525,
+  trainingDays: 6,
+  job: 'desk',
   autoTargets: true,
   lossRate: 0.5, // kg/tuần
   proteinPerKg: 2.0,
@@ -71,7 +74,10 @@ export function sanitize(raw) {
     goalWeight: clamp(s.goalWeight, 30, 300, 70),
     age: s.age ? clamp(s.age, 12, 100, null) : null,
     heightCm: s.heightCm ? clamp(s.heightCm, 120, 230, null) : null,
-    activity: clamp(s.activity, 1.1, 2, 1.55),
+    trainingDays: [3, 4, 5, 6, 7].includes(+s.trainingDays) ? +s.trainingDays : 6,
+    job: ['desk', 'mixed', 'manual'].includes(s.job) ? s.job : 'desk',
+    // hệ số vận động suy ra từ công việc + số buổi tập
+    activity: activityFactor(['desk', 'mixed', 'manual'].includes(s.job) ? s.job : 'desk', [3, 4, 5, 6, 7].includes(+s.trainingDays) ? +s.trainingDays : 6),
     lossRate: clamp(s.lossRate, 0.1, 1.5, 0.5),
     proteinPerKg: clamp(s.proteinPerKg, 1, 3.5, 2),
     fatCap: clamp(s.fatCap, 10, 200, 30),
@@ -110,7 +116,10 @@ export function macroTargets(raw, currentWeight) {
   const weeklyLoss = (deficit * 7) / KCAL_PER_KG;
   const toGo = Math.max(0, W - s.goalWeight);
   const weeks = weeklyLoss > 0 ? toGo / weeklyLoss : null;
+  // Fat tối thiểu khuyến nghị dài hạn: nam ≥ 0,5 g/kg; nữ ≥ 0,5 g/kg và ≥ 20% năng lượng
+  const fatMin = Math.round(s.sex === 'female' ? Math.max(W * 0.5, (kcal * 0.2) / 9) : W * 0.5);
   return {
+    fatMin,
     kcal,
     carbs,
     proteinMin,

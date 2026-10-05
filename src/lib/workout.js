@@ -1,12 +1,17 @@
 import { db } from './db';
-import { DEFAULT_SETS, dayOf } from './program';
+import { dayOf, programById, programOfWorkout } from './program';
 import { todayStr } from './utils';
 
 // Buổi đã hoàn thành gần nhất (để suy ra nhóm cơ kế tiếp)
 // sinceTs: chỉ tính các buổi hoàn thành sau mốc "bắt đầu lại chu kỳ"
-export async function lastCompletedWorkout(sinceTs = null) {
+// programId: chỉ tính buổi thuộc chương trình đó (đổi chương trình thì chu kỳ bắt đầu lại từ D1)
+export async function lastCompletedWorkout(sinceTs = null, programId = null) {
   const all = await db.workouts.toArray();
-  return all.filter((w) => w.completedAt && (!sinceTs || w.completedAt > sinceTs)).sort((a, b) => b.completedAt - a.completedAt)[0] || null;
+  return (
+    all
+      .filter((w) => w.completedAt && (!sinceTs || w.completedAt > sinceTs) && (!programId || programOfWorkout(w).id === programId))
+      .sort((a, b) => b.completedAt - a.completedAt)[0] || null
+  );
 }
 
 // Các buổi đã hoàn thành từ ngày `fromDate` (YYYY-MM-DD) trở đi
@@ -20,36 +25,50 @@ export async function activeWorkout() {
   return all.filter((w) => !w.completedAt).sort((a, b) => b.startedAt - a.startedAt)[0] || null;
 }
 
-// Buổi trước cùng nhóm cơ, và các set đã hoàn thành của nó, gom theo tên bài
-export async function previousSession(dayIndex, excludeId) {
-  const list = await db.workouts.where('dayIndex').equals(dayIndex).toArray();
-  const prev = list
+// Lần tập gần nhất của từng bài (theo tên bài, bất kể chương trình hay ngày nào),
+// dùng làm tham chiếu "lần trước" và để điền sẵn số tạ.
+export async function previousByExercise(names, excludeId = null) {
+  const done = (await db.workouts.toArray())
     .filter((w) => w.completedAt && w.id !== excludeId)
-    .sort((a, b) => b.completedAt - a.completedAt)[0];
-  if (!prev) return { workout: null, byExercise: {} };
-  const logs = await db.exerciseLogs.where('workoutId').equals(prev.id).toArray();
+    .sort((a, b) => b.completedAt - a.completedAt)
+    .slice(0, 120);
   const byExercise = {};
-  for (const l of logs.filter((x) => x.isCompleted).sort((a, b) => a.setIndex - b.setIndex)) {
-    (byExercise[l.exerciseName] ||= []).push(l);
+  const dates = {};
+  if (!done.length) return { byExercise, dates };
+  const want = new Set(names);
+  const logs = await db.exerciseLogs.where('workoutId').anyOf(done.map((w) => w.id)).filter((l) => !!l.isCompleted && want.has(l.exerciseName)).toArray();
+  for (const w of done) {
+    const mine = logs.filter((l) => l.workoutId === w.id);
+    for (const name of want) {
+      if (byExercise[name]) continue;
+      const sets = mine.filter((l) => l.exerciseName === name).sort((a, b) => a.setIndex - b.setIndex);
+      if (sets.length) {
+        byExercise[name] = sets;
+        dates[name] = w.date;
+      }
+    }
+    if (Object.keys(byExercise).length === want.size) break;
   }
-  return { workout: prev, byExercise };
+  return { byExercise, dates };
 }
 
-export async function startWorkout(dayIndex) {
-  const day = dayOf(dayIndex);
-  const { byExercise } = await previousSession(dayIndex);
+export async function startWorkout(programId, dayIndex) {
+  const program = programById(programId);
+  const day = dayOf(program, dayIndex);
+  const { byExercise } = await previousByExercise(day.exercises.map((e) => e.name));
   return db.transaction('rw', db.workouts, db.exerciseLogs, async () => {
     const workoutId = await db.workouts.add({
       date: todayStr(),
-      dayIndex,
+      dayIndex: day.dayIndex,
+      programId: program.id,
       targetMuscle: day.muscle,
       startedAt: Date.now(),
       completedAt: null,
       notes: {},
     });
     const rows = [];
-    day.exercises.forEach((name, order) => {
-      const n = Math.max(DEFAULT_SETS, byExercise[name]?.length || 0);
+    day.exercises.forEach(({ name, sets }, order) => {
+      const n = Math.max(sets, byExercise[name]?.length || 0);
       for (let i = 1; i <= n; i++) {
         rows.push({ workoutId, exerciseName: name, exerciseOrder: order, setIndex: i, weightKg: null, reps: null, isCompleted: 0 });
       }
@@ -126,8 +145,8 @@ export async function discardWorkout(id) {
   });
 }
 
-export async function changeWorkoutDay(id, dayIndex) {
-  // Đổi nhóm cơ thủ công cho buổi đang tập (chỉ khi chưa tick set nào)
+export async function changeWorkoutDay(id, programId, dayIndex) {
+  // Đổi buổi thủ công cho buổi đang tập (chỉ khi chưa tick set nào)
   await discardWorkout(id);
-  return startWorkout(dayIndex);
+  return startWorkout(programId, dayIndex);
 }

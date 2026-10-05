@@ -700,24 +700,29 @@ function NutritionGuide({ targets: t }) {
   const w = t.weight;
   const pLo = Math.round(w * 1.8);
   const pHi = Math.round(w * 2.2);
-  const fatMin = Math.round(w * 0.5);
+  const fatMin = t.fatMin;
+  const female = s.sex === 'female';
+  const pLoF = Math.round(w * (female ? 1.6 : 1.8));
+  const pHiF = Math.round(w * (female ? 2.0 : 2.2));
   const fatPct = Math.round(((s.fatCap * 9) / Math.max(t.kcal, 1)) * 100);
   const H = ({ children }) => <h4 className="text-[17px] font-semibold mt-5 mb-1">{children}</h4>;
   return (
     <div className="text-[16px] leading-relaxed rounded-[18px] bg-surface p-4">
       <H>Protein giữ cơ khi ăn thâm hụt</H>
       <p>
-        Tổng quan cho người tập thể hình khuyến nghị 1,8–2,7 g/kg/ngày khi giảm mỡ. Với {fmtNum(w)} kg, mức hợp lý là{' '}
+        Tổng quan cho người tập thể hình khuyến nghị 1,8–2,7 g/kg/ngày khi giảm mỡ{female ? '; với nữ, 1,6–2,0 g/kg thường đã đủ và dễ ăn hơn' : ''}. Với {fmtNum(w)} kg, mức hợp lý là{' '}
         <b>
-          {pLo}–{pHi} g
+          {pLoF}–{pHiF} g
         </b>
         . Mục tiêu hiện tại là {t.proteinMin}–{t.proteinMax} g. Chia đều 4–5 bữa, mỗi bữa 30–40 g.
       </p>
       <H>Fat {s.fatCap} g/ngày</H>
       <p>
         Ở mức {t.kcal.toLocaleString('vi-VN')} kcal, {s.fatCap} g Fat bằng khoảng <b>{fatPct}% năng lượng</b>. Khuyến nghị cho giai đoạn giảm mỡ là 10–25% trong thời gian ngắn
-        và không nên ăn rất ít béo kéo dài. Một phân tích gộp ở nam giới thấy chế độ ít béo (~20% năng lượng) làm testosterone giảm khoảng 10–15%. Mức an toàn hơn để duy
-        trì lâu dài là khoảng <b>0,5 g/kg ≈ {fatMin} g/ngày</b>. Bạn đổi trần Fat trong Cài đặt.
+        và không nên ăn rất ít béo kéo dài. {female
+          ? 'Với nữ, ăn quá ít béo kéo dài có thể ảnh hưởng nội tiết và chu kỳ kinh nguyệt; nên giữ fat ít nhất ~20% năng lượng.'
+          : 'Một phân tích gộp ở nam giới thấy chế độ ít béo (~20% năng lượng) làm testosterone giảm khoảng 10–15%.'}{' '}
+        Mức an toàn hơn để duy trì lâu dài là khoảng <b>{fatMin} g/ngày</b>. Bạn đổi trần Fat trong Cài đặt.
       </p>
       <H>Tốc độ giảm cân</H>
       <p>

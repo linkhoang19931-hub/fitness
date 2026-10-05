@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { DAY_COLORS, PROGRAM, dayOf, nextDayIndex } from '../lib/program';
+import { DAY_COLORS, dayOf, getProgram, nextDayIndex, programOfWorkout, unitOf } from '../lib/program';
 import { useRest, useSettings } from '../lib/store';
 import { addDays, fmtDate, fmtNum, fmtClock, fmtW, unlockAudio, weekStart } from '../lib/utils';
 import { useToday } from '../lib/useToday';
@@ -16,7 +16,7 @@ import {
   discardWorkout,
   finishWorkout,
   lastCompletedWorkout,
-  previousSession,
+  previousByExercise,
   removeLastSet,
   startWorkout,
 } from '../lib/workout';
@@ -41,7 +41,7 @@ export default function Workout() {
 /* ---------- Buổi tập quên bấm kết thúc ---------- */
 function StaleSession({ workout, today }) {
   const done = useLiveQuery(() => db.exerciseLogs.where('workoutId').equals(workout.id).filter((l) => !!l.isCompleted).count(), [workout.id]);
-  const day = dayOf(workout.dayIndex);
+  const day = dayOf(programOfWorkout(workout), workout.dayIndex);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
@@ -118,16 +118,21 @@ function Planner() {
   const resetCycle = useSettings((s) => s.resetCycle);
   const today = useToday();
   const monday = weekStart(today);
-  const last = useLiveQuery(() => lastCompletedWorkout(cycleStartAt), [cycleStartAt]);
+  const sex = useSettings((s) => s.sex);
+  const trainingDays = useSettings((s) => s.trainingDays);
+  const program = getProgram(sex, trainingDays);
+  const total = program.list.length;
+  const last = useLiveQuery(() => lastCompletedWorkout(cycleStartAt, program.id), [cycleStartAt, program.id]);
   const lastAny = useLiveQuery(() => lastCompletedWorkout(), []);
   const week = useLiveQuery(() => completedSince(monday), [monday]) || [];
   const [manual, setManual] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [guide, setGuide] = useState(null);
-  const suggested = nextDayIndex(last?.dayIndex);
-  const dayIndex = manual ?? suggested;
-  const day = dayOf(dayIndex);
-  const prev = useLiveQuery(() => previousSession(dayIndex), [dayIndex]);
+  const suggested = nextDayIndex(last?.dayIndex, total);
+  const dayIndex = manual && manual <= total ? manual : suggested;
+  const day = dayOf(program, dayIndex);
+  const prev = useLiveQuery(() => previousByExercise(day.exercises.map((e) => e.name)), [program.id, dayIndex]);
+  useEffect(() => setManual(null), [program.id]);
   const [busy, setBusy] = useState(false);
   const color = DAY_COLORS[dayIndex];
   const todayDone = week.filter((w) => w.date === today);
@@ -142,7 +147,7 @@ function Planner() {
   const start = async () => {
     unlockAudio(); // mở khoá âm thanh trên iOS bằng chính thao tác chạm này
     setBusy(true);
-    await startWorkout(dayIndex);
+    await startWorkout(program.id, dayIndex);
     setBusy(false);
   };
 
@@ -160,7 +165,7 @@ function Planner() {
         <Card className="mb-3">
           <div className="text-[17px] font-semibold">Tuần mới bắt đầu</div>
           <p className="text-[15px] text-muted mt-1">
-            Tuần trước bạn dừng ở D{last?.dayIndex ?? '–'} {last ? dayOf(last.dayIndex).muscle : ''}. Muốn tập lại từ D1 Ngực hay đi tiếp D{suggested} {dayOf(suggested).muscle}?
+            Tuần trước bạn dừng ở D{last?.dayIndex ?? '–'} {last ? dayOf(program, last.dayIndex).muscle : ''}. Muốn tập lại từ D1 {program.list[0].muscle} hay đi tiếp D{suggested} {dayOf(program, suggested).muscle}?
           </p>
           <div className="grid grid-cols-2 gap-2 mt-3">
             <Button variant="primary" onClick={doReset}>
@@ -186,17 +191,20 @@ function Planner() {
           </div>
         </div>
         <ol className="px-4">
-          {day.exercises.map((ex, i) => {
+          {day.exercises.map(({ name: ex, sets: nSets }, i) => {
             const sets = prev?.byExercise?.[ex];
+            const unit = unitOf(ex);
             return (
               <li key={ex} className="hairline-b last:shadow-none">
                 <button className="w-full flex gap-3 py-2.5 text-left items-start" onClick={() => setGuide(ex)}>
                 <span className="w-5 shrink-0 text-muted font-rounded tnum font-semibold text-[15px] pt-px">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[16px] leading-snug">{ex}</div>
-                  {sets?.length > 0 && (
-                    <div className="text-[13px] text-muted font-rounded tnum truncate">{sets.map((s) => `${fmtW(s.weightKg)}×${s.reps ?? '–'}`).join('  ·  ')}</div>
-                  )}
+                  <div className="text-[13px] text-muted font-rounded tnum truncate">
+                    {nSets} set
+                    {sets?.length > 0 &&
+                      ` · lần trước ${prev.dates[ex] ? fmtDate(prev.dates[ex]) + ': ' : ''}${sets.map((s) => (unit ? `${s.reps ?? '–'} ${unit}` : `${fmtW(s.weightKg)}×${s.reps ?? '–'}`)).join('  ')}`}
+                  </div>
                 </div>
                 <IconInfo size={20} className="text-accent shrink-0 mt-0.5" />
                 </button>
@@ -205,7 +213,6 @@ function Planner() {
           })}
         </ol>
         <div className="p-4 pt-2">
-          {prev?.workout && <p className="text-[13px] text-muted mb-3">Lần gần nhất: {fmtDate(prev.workout.date)}</p>}
           <Button
             variant={todayDone.length ? 'ghost' : 'primary'}
             className="w-full h-[52px] flex items-center justify-center gap-2"
@@ -231,11 +238,11 @@ function Planner() {
           )
         }
       >
-        Chu kỳ 6 ngày
+        Chu kỳ {total} buổi
       </GroupLabel>
       <Card className="!p-2">
-        <div className="grid grid-cols-3 gap-1.5">
-          {PROGRAM.map((d) => {
+        <div className={`grid gap-1.5 ${total === 4 || total === 7 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {program.list.map((d) => {
             const on = d.dayIndex === dayIndex;
             return (
               <button
@@ -252,14 +259,17 @@ function Planner() {
         </div>
       </Card>
       <p className="px-4 pt-2 text-[13px] text-muted">
-        Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần: nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp. Chạm một nhóm cơ khác để tập buổi đó hôm nay; buổi sau sẽ nối tiếp từ nhóm cơ bạn vừa tập.
+        <b className="text-ink font-semibold">
+          Chương trình {sex === 'female' ? 'nữ' : 'nam'} · {program.days} buổi/tuần · {program.split}
+        </b>
+        . Đổi giới tính hoặc số buổi trong Cài đặt. Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần: nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp. Chạm một nhóm cơ khác để tập buổi đó hôm nay; buổi sau sẽ nối tiếp từ nhóm cơ bạn vừa tập.
       </p>
 
       <GuideSheet name={guide} onClose={() => setGuide(null)} />
 
       <Sheet open={resetOpen} onClose={() => setResetOpen(false)} title="Bắt đầu lại từ D1?">
         <p className="text-[15px] text-muted mb-4">
-          Buổi tiếp theo sẽ là D1 Ngực. Lịch sử tập, số liệu buổi trước, cân nặng, dinh dưỡng và ảnh đều giữ nguyên; số tạ lần trước của từng bài vẫn hiện như cũ.
+          Buổi tiếp theo sẽ là D1 {program.list[0].muscle}. Lịch sử tập, số liệu buổi trước, cân nặng, dinh dưỡng và ảnh đều giữ nguyên; số tạ lần trước của từng bài vẫn hiện như cũ.
         </p>
         <Button variant="primary" className="w-full" onClick={doReset}>
           Bắt đầu lại từ D1
@@ -477,9 +487,12 @@ function History() {
 /* ---------------- Màn hình đang tập (In-Workout Logger) ---------------- */
 function ActiveSession({ workout }) {
   const logs = useLiveQuery(() => db.exerciseLogs.where('workoutId').equals(workout.id).toArray(), [workout.id]);
-  const prev = useLiveQuery(() => previousSession(workout.dayIndex, workout.id), [workout.dayIndex, workout.id]);
+  const program = programOfWorkout(workout);
+  const names = (logs || []).map((l) => l.exerciseName);
+  const nameKey = [...new Set(names)].join('|');
+  const prev = useLiveQuery(() => previousByExercise([...new Set(names)], workout.id), [nameKey, workout.id]);
   const wake = useWakeLock(true);
-  const day = dayOf(workout.dayIndex);
+  const day = dayOf(program, workout.dayIndex);
   const [sheet, setSheet] = useState(null); // 'finish' | 'switch' | 'discard'
   const [guide, setGuide] = useState(null);
 
@@ -505,7 +518,7 @@ function ActiveSession({ workout }) {
           order={g.order}
           sets={g.sets}
           prevSets={prev?.byExercise?.[name] || []}
-          prevDate={prev?.workout?.date}
+          prevDate={prev?.dates?.[name]}
           onGuide={() => setGuide(name)}
         />
       ))}
@@ -571,13 +584,13 @@ function ActiveSession({ workout }) {
           <p className="text-muted">Bạn đã tick {done} set. Hãy huỷ buổi hiện tại trước nếu muốn đổi sang nhóm cơ khác.</p>
         ) : (
           <div className="rounded-[18px] bg-surface">
-            {PROGRAM.map((d) => (
+            {program.list.map((d) => (
               <button
                 key={d.dayIndex}
                 className="w-full flex items-center gap-3 px-4 min-h-[60px] hairline-b last:shadow-none text-left"
                 onClick={async () => {
                   setSheet(null);
-                  if (d.dayIndex !== workout.dayIndex) await changeWorkoutDay(workout.id, d.dayIndex);
+                  if (d.dayIndex !== workout.dayIndex) await changeWorkoutDay(workout.id, program.id, d.dayIndex);
                 }}
               >
                 <DayBadge dayIndex={d.dayIndex} size={34} />
@@ -638,6 +651,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
   const startRest = useRest((s) => s.start);
   const [note, setNote] = useState(workout.notes?.[name] || '');
   const allDone = sets.every((s) => s.isCompleted);
+  const unit = unitOf(name); // bài tính theo thời gian (phút/giây) thì không có ô kg
   const doneCount = sets.filter((s) => s.isCompleted).length;
 
   const saveNote = async (text = note) => {
@@ -679,13 +693,15 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
         </span>
       </div>
       <p className="text-[13px] text-muted font-rounded tnum mb-3 pl-9">
-        {prevSets.length ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => `${fmtW(s.weightKg)}×${s.reps ?? '–'}`).join('  ')}` : 'Chưa có dữ liệu buổi trước'}
+        {prevSets.length
+          ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => (unit ? `${s.reps ?? '–'} ${unit}` : `${fmtW(s.weightKg)}×${s.reps ?? '–'}`)).join('  ')}`
+          : 'Chưa có dữ liệu buổi trước'}
       </p>
 
       <div className="grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center text-[12px] font-medium text-muted mb-1 px-0.5">
         <span className="text-center">Set</span>
-        <span className="text-center">kg</span>
-        <span className="text-center">reps</span>
+        <span className="text-center">{unit ? '' : 'kg'}</span>
+        <span className="text-center">{unit || 'reps'}</span>
         <span />
       </div>
       <div className="space-y-2">
@@ -697,16 +713,20 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
               <span className="text-center font-semibold font-rounded tnum text-[17px]" style={{ color: done ? 'var(--go)' : 'var(--muted)' }}>
                 {s.setIndex}
               </span>
-              <NumField
-                value={s.weightKg}
-                placeholder={ref ? fmtW(ref.weightKg) : 'kg'}
-                onCommit={(v) => db.exerciseLogs.update(s.id, { weightKg: v })}
-                aria-label={`Tạ set ${s.setIndex}`}
-              />
+              {unit ? (
+                <span />
+              ) : (
+                <NumField
+                  value={s.weightKg}
+                  placeholder={ref ? fmtW(ref.weightKg) : 'kg'}
+                  onCommit={(v) => db.exerciseLogs.update(s.id, { weightKg: v })}
+                  aria-label={`Tạ set ${s.setIndex}`}
+                />
+              )}
               <NumField
                 value={s.reps}
                 decimal={false}
-                placeholder={ref?.reps != null ? String(ref.reps) : 'reps'}
+                placeholder={ref?.reps != null ? String(ref.reps) : unit || 'reps'}
                 onCommit={(v) => db.exerciseLogs.update(s.id, { reps: v === null ? null : Math.round(v) })}
                 aria-label={`Reps set ${s.setIndex}`}
               />

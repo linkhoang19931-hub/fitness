@@ -59,6 +59,20 @@ Cài đặt chỉnh xong bấm **Lưu cài đặt** mới áp dụng (thanh lưu
 
 Cài đặt → bật "Tự tính mục tiêu": Kcal = TDEE (Mifflin–St Jeor theo tuổi, chiều cao, cân gần nhất, mức vận động) − thâm hụt theo tốc độ giảm (0,25–1 kg/tuần, 7.700 kcal/kg). Protein = g/kg × cân hiện tại. Carbs = phần còn lại sau Protein và trần Fat. Đổi cân mục tiêu để xem ngày dự kiến chạm mốc; đạt mục tiêu thì tự chuyển sang ăn duy trì.
 
+## Chương trình tập
+
+Chọn **giới tính** và **số buổi/tuần** (3–7) trong Cài đặt; app tự đổi chương trình (`src/lib/program.js`):
+
+| Số buổi | Nam | Nữ |
+|---|---|---|
+| 3 | Toàn thân A/B/C | Toàn thân A/B/C, ưu tiên mông |
+| 4 | Thân trên / thân dưới ×2 | Thân trên / thân dưới ×2, ưu tiên mông |
+| 5 | Trên / Dưới / Đẩy / Kéo / Chân | Mông · Đẩy · Đùi trước · Kéo · Mông & bụng |
+| 6 | Chia nhóm cơ 6 ngày (lịch gốc) | Chia nhóm cơ 6 ngày, ưu tiên thân dưới |
+| 7 | 6 ngày + 1 ngày hồi phục | 6 ngày + 1 ngày hồi phục |
+
+Hệ số vận động tính từ công việc hằng ngày × số buổi tập (ảnh hưởng TDEE). Đổi chương trình thì chu kỳ bắt đầu lại từ D1; số tạ lần trước tra theo tên bài nên vẫn còn. Bài tính giờ (Plank, đi bộ dốc, giãn cơ) nhập giây/phút thay cho kg/rep.
+
 ## Tập luyện
 
 - Xong buổi trong ngày: thẻ "Đã xong buổi tập hôm nay" có dấu tick, dải Tuần này đánh dấu ngày đã tập.
