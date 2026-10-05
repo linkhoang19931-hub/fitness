@@ -88,7 +88,7 @@ function WorkoutHeader() {
     <header className="pt-[calc(16px+env(safe-area-inset-top))] pb-4 flex items-end justify-between">
       <div>
         <div className="text-xs text-muted">{fmtDate(todayStr())} · khung 6:00 – 6:50</div>
-        <h1 className="text-2xl font-black tracking-tight">Shuru Workout</h1>
+        <h1 className="text-2xl font-black tracking-tight">Linh's Fitness</h1>
       </div>
     </header>
   );

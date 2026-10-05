@@ -1,4 +1,4 @@
-# Shuru Workout & PFC Tracker
+# Linh's Fitness Tracker
 
 PWA local-first: lịch tập 6 ngày luân phiên, nhật ký set/reps có tham chiếu buổi trước, bộ đếm nghỉ, nhật ký PFC với trần Fat, cân nặng + trung bình trượt 7 ngày, ảnh check-in, sao lưu JSON/CSV. Không máy chủ, không cloud — toàn bộ dữ liệu nằm trong IndexedDB của trình duyệt.
 
@@ -33,7 +33,7 @@ PWA chỉ cài được khi chạy trên **HTTPS**, vì vậy cần đưa thư m
 2. Import repo vào Vercel hoặc Cloudflare Pages. Build command: `npm run build`, Output directory: `docs`.
 
 **Cách 3 — GitHub Pages:**
-App đã cấu hình `base: './'` nên chạy được ở đường dẫn con `username.github.io/shuru-tracker/`. Build ra `docs/` rồi chọn nguồn `main` / `/docs` trong Settings → Pages.
+App đã cấu hình `base: './'` nên chạy được ở đường dẫn con `linkhoang19931-hub.github.io/fitness/`. Build ra `docs/` rồi chọn nguồn `main` / `/docs` trong Settings → Pages.
 
 ## Cài vào màn hình chính
 

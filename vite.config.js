@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // base './' giúp app chạy được cả ở domain gốc (Vercel, Cloudflare Pages)
-// lẫn thư mục con (GitHub Pages: username.github.io/shuru-tracker/).
+// lẫn thư mục con (GitHub Pages: linkhoang19931-hub.github.io/fitness/).
 const PREVIEW = process.env.PREVIEW === '1';
 
 export default defineConfig({
@@ -17,8 +17,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Shuru Workout & PFC Tracker',
-        short_name: 'Shuru',
+        name: "Linh's Fitness Tracker",
+        short_name: "Linh's Fitness",
         description: 'Lịch tập 6 ngày, nhật ký PFC và cân nặng — chạy 100% offline trên máy.',
         lang: 'vi',
         start_url: './',

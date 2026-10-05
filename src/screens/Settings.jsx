@@ -293,7 +293,7 @@ function StorageCard() {
           Yêu cầu trình duyệt không tự xoá dữ liệu
         </Button>
       )}
-      <p className="text-xs text-faint mt-3">Shuru Tracker v1.0 · 100% local-first, không máy chủ.</p>
+      <p className="text-xs text-faint mt-3">Linh's Fitness Tracker v1.0 · 100% local-first, không máy chủ.</p>
     </Card>
   );
 }
