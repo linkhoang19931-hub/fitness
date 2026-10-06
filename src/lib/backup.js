@@ -1,5 +1,4 @@
 import { db, TABLES } from './db';
-import { dayOf } from './program';
 import { movingAverage7, todayStr } from './utils';
 
 // ---------- Tiện ích file ----------
@@ -163,4 +162,18 @@ export async function resetDB() {
   await db.open(); // mở lại → sự kiện populate nạp lại món mẫu
 }
 
-export const muscleLabel = (dayIndex) => dayOf(dayIndex).muscle;
+
+export async function exportSleepCSV() {
+  const rows = (await db.sleeps.toArray())
+    .filter((s) => s.end)
+    .sort((a, b) => a.start - b.start)
+    .map((s) => {
+      const f = (t) => {
+        const d = new Date(t);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      };
+      return [s.wakeDate, f(s.start), f(s.end), Math.round(((s.end - s.start) / 3600000) * 100) / 100, s.quality ?? '', s.note || ''];
+    });
+  const csv = toCSV(['Ngày dậy', 'Đi ngủ', 'Thức dậy', 'Số giờ', 'Chất lượng (1–5)', 'Ghi chú'], rows);
+  await saveFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `baki-goal-giac-ngu-${todayStr()}.csv`);
+}

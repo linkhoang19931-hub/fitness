@@ -6,12 +6,14 @@ import Workout from './screens/Workout';
 import Nutrition from './screens/Nutrition';
 import Body from './screens/Body';
 import Settings from './screens/Settings';
+import Sleep from './screens/Sleep';
 import RestTimer from './components/RestTimer';
-import { IconDumbbell, IconFork, IconGear, IconScale } from './components/Icons';
+import { IconDumbbell, IconFork, IconGear, IconMoon, IconScale } from './components/Icons';
 
 const TABS = [
   { id: 'workout', label: 'Tập luyện', icon: IconDumbbell, title: 'Tập luyện', Screen: Workout },
   { id: 'nutrition', label: 'Dinh dưỡng', icon: IconFork, title: 'Dinh dưỡng', Screen: Nutrition },
+  { id: 'sleep', label: 'Giấc ngủ', icon: IconMoon, title: 'Giấc ngủ', Screen: Sleep },
   { id: 'body', label: 'Cơ thể', icon: IconScale, title: 'Cơ thể', Screen: Body },
   { id: 'settings', label: 'Cài đặt', icon: IconGear, title: 'Cài đặt', Screen: Settings },
 ];
@@ -91,7 +93,7 @@ export default function App() {
       <RestTimer />
 
       <nav className="fixed bottom-0 inset-x-0 z-40 material hairline-t safe-bottom">
-        <div className="mx-auto max-w-lg grid grid-cols-4">
+        <div className="mx-auto max-w-lg grid grid-cols-5">
           {TABS.map((t) => {
             const Icon = t.icon;
             const on = t.id === tab;

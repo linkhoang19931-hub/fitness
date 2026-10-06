@@ -28,7 +28,12 @@ db.version(2).stores({
   dayPlans: 'date',
 });
 
-export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets', 'dayPlans'];
+// v3: giấc ngủ. sleeps: { id, start, end|null, quality 1–5|null, note, wakeDate }
+db.version(3).stores({
+  sleeps: '++id, wakeDate, start',
+});
+
+export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets', 'dayPlans', 'sleeps'];
 
 export const DEFAULT_PRESETS = [
   { name: 'Cơm trắng (200g)', protein: 5.4, fat: 0.6, carbs: 56 },

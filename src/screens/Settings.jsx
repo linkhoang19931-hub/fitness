@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { DEFAULT_SETTINGS, LOSS_RATES, macroTargets, pickSettings, sanitize, useDraft, useSettings } from '../lib/store';
 import { useLatestWeight } from '../lib/targets';
-import { exportJSON, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
+import { exportJSON, exportSleepCSV, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
 import { AnimatedNumber, Button, Card, GroupLabel, NumField, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
 import { IconFlame } from '../components/Icons';
 import { DAY_COLORS, JOBS, TRAINING_DAYS, getProgram } from '../lib/program';
@@ -327,6 +327,7 @@ const TABLE_LABEL = {
   checkinPhotos: 'Ảnh check-in',
   foodPresets: 'Món của tôi',
   dayPlans: 'Thực đơn theo ngày',
+  sleeps: 'Giấc ngủ',
 };
 
 function BackupCard({ showToast }) {
@@ -368,6 +369,7 @@ function BackupCard({ showToast }) {
         <RowBtn onClick={() => run(exportWorkoutCSV)}>Xuất CSV lịch sử tập</RowBtn>
         <RowBtn onClick={() => run(exportWeightCSV)}>Xuất CSV cân nặng</RowBtn>
         <RowBtn onClick={() => run(exportNutritionCSV)}>Xuất CSV dinh dưỡng</RowBtn>
+        <RowBtn onClick={() => run(exportSleepCSV)}>Xuất CSV giấc ngủ</RowBtn>
       </Card>
       <p className="px-4 pt-2 text-[13px] text-muted">
         Dữ liệu chỉ nằm trên máy này. Xuất file .json mỗi tuần và cất vào Tệp hoặc Drive để không mất khi đổi máy.

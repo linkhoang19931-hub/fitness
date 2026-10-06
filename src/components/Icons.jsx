@@ -160,3 +160,22 @@ export const IconInfo = (p) => (
     <circle cx="12" cy="7.9" r="1.15" fill="currentColor" />
   </Svg>
 );
+
+export const IconMoon = ({ filled, ...p }) => (
+  <Svg vb={28} {...p}>
+    <path
+      d="M22.6 17.4A9.6 9.6 0 0 1 10.6 5.4a.6.6 0 0 0-.8-.7A10.2 10.2 0 1 0 23.3 18.2a.6.6 0 0 0-.7-.8Z"
+      {...stroke(1.9)}
+      fill={filled ? 'currentColor' : 'none'}
+    />
+    <path d="M18.5 4.5v3M17 6h3M22.5 9.5v2M21.5 10.5h2" {...stroke(1.6)} />
+  </Svg>
+);
+export const IconSunrise = (p) => (
+  <Svg {...p}>
+    <g {...stroke(1.9)}>
+      <path d="M5 17a7 7 0 0 1 14 0" />
+      <path d="M2.5 17h19M12 3.5v3M4.6 9.6l1.8 1.4M19.4 9.6l-1.8 1.4M7 21h10" />
+    </g>
+  </Svg>
+);

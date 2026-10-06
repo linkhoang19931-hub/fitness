@@ -53,6 +53,16 @@ Sau lần mở đầu tiên có mạng, app chạy hoàn toàn offline (kể c�
 
 Thiết kế theo phong cách iOS: tiêu đề lớn, thẻ nhóm bo góc, thanh tab mờ, màu hệ thống iOS, chế độ Tự động/Tối/Sáng. Icon app và bộ icon trong app được vẽ riêng cho Baki Goal.
 
+## Giấc ngủ
+
+Tab **Giấc ngủ**: bấm **Đi ngủ** khi lên giường, sáng bấm **Đã dậy** (dưới 3 phút coi là bấm nhầm; quá 16 giờ chưa bấm dậy thì app nhắc sửa giờ). Quên bấm thì ghi thủ công; sửa/xoá từng đêm trong lịch sử.
+
+- **Chấm điểm 0–100 mỗi đêm**: thời lượng so với khuyến nghị theo tuổi (60đ), độ đều giờ đi ngủ so với 7 đêm trước (25đ, trừ thêm nếu ngủ sau 1:00), cảm nhận 1–5 sao (15đ). Tốt ≥85 · Khá 70–84 · Chưa đủ 50–69 · Kém <50.
+- **Khuyến nghị theo tuổi** (National Sleep Foundation): 14–17t 8–10h; 18–64t 7–9h; ≥65t 7–8h. Mục tiêu riêng cộng thêm 30 phút khi tập ≥5 buổi/tuần hoặc đang ăn thâm hụt.
+- **Ảnh hưởng khi ngủ thiếu**: nêu theo mức thiếu; khi đang giảm mỡ dẫn Nedeltcheva 2010 (ngủ 5,5h thay vì 8,5h: giảm mỡ ít hơn 55%, mất khối nạc nhiều hơn 60%); với nam dẫn Leproult 2011 (1 tuần ngủ 5h: testosterone giảm 10–15%).
+- **Dashboard** tuần / tháng / năm: biểu đồ cột tô màu theo mức (xanh = trong khuyến nghị, cam = chấp nhận được, đỏ = quá ít/nhiều), vùng khuyến nghị và đường mục tiêu; trung bình/đêm, nợ ngủ, giờ ngủ và giờ dậy trung bình; gợi ý theo từng kỳ (thiếu ngủ, giờ ngủ thất thường, ngủ muộn, nợ ngủ, chất lượng thấp).
+- Giờ nên lên giường tính từ giờ dậy thường ngày (mặc định 5:30 vì tập 6:00). Giấc ngắn ban ngày (9:00–19:00, <3 giờ) tính là ngủ trưa.
+
 ## Hiệu ứng & cảm giác dùng
 
 Dùng thư viện Motion: chuyển tab trượt nhẹ, bảng kéo lên có lò xo (vuốt thanh trên xuống để đóng), vuốt sang trái để xoá (món ăn, món ngoài thực đơn, số đo cân), số chạy khi thay đổi, tick set có hiệu ứng nảy, thẻ bài/set thêm bớt có chuyển động, đồng hồ nghỉ trượt lên, màn chúc mừng có pháo giấy và kỷ lục mới khi lưu buổi tập. Rung nhẹ khi chạm (iPhone iOS 18+ qua công tắc hệ thống). Tự tắt hiệu ứng khi máy bật "Giảm chuyển động".
