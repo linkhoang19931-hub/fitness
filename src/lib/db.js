@@ -21,7 +21,14 @@ db.version(1).stores({
   foodPresets: '++id, name',
 });
 
-export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets'];
+// v2: thực đơn sửa được theo từng ngày.
+// dayPlans: { date, planId, mode, meals: [{ key, time, name, eaten, items: [{ uid, foodId, name, n, protein, fat, carbs }] }] }
+//   protein/fat/carbs của item là giá trị cho n = 1; nutritionLogs của bữa đã ăn mang planKey = `${date}:${meal.key}`.
+db.version(2).stores({
+  dayPlans: 'date',
+});
+
+export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets', 'dayPlans'];
 
 export const DEFAULT_PRESETS = [
   { name: 'Cơm trắng (200g)', protein: 5.4, fat: 0.6, carbs: 56 },

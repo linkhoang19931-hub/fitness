@@ -83,7 +83,8 @@ Hệ số vận động tính từ công việc hằng ngày × số buổi tậ
 
 ## Dinh dưỡng trong app
 
-- **Gợi ý hôm nay**: chọn sẵn thực đơn theo ngày (ngày tập / ngày nghỉ), chia khẩu phần các bữa còn lại theo phần Kcal và Protein còn thiếu sau những gì đã ăn.
+- **Thực đơn hôm nay** (sửa trực tiếp): app tự tạo thực đơn mỗi ngày theo mục tiêu. Chạm món để đổi khẩu phần (×0,25–×3), đổi sang món tương đương / món bất kỳ, hoặc xoá; "+ Thêm món" vào từng bữa với gợi ý khi gõ; nút "Ăn rồi" ghi cả bữa vào nhật ký (sửa món sau đó thì nhật ký tự cập nhật). "Đổi thực đơn" giữ bữa đã ăn; "Chia lại khẩu phần" khớp các bữa chưa ăn theo phần còn thiếu. Lưu trong bảng `dayPlans` (IndexedDB v2), có trong file sao lưu.
+- **Ăn ngoài thực đơn**: ghi món bất kỳ, sửa lượng ×0,5–×2 hoặc xoá.
 
 - **Kho món** (tab PFC → Thêm món): hơn 300 thực phẩm và món Việt, Nhật, Hàn, Âu, Trung–Thái, đồ uống có P/F/C theo khẩu phần, tìm không cần gõ dấu, chọn ×0.5–×2. Món nhiều Fat (≥10g/phần) có nhãn cảnh báo. Nguồn: USDA FoodData Central, Bảng thành phần thực phẩm Việt Nam, NutriHome; món nhà nấu là ước tính.
 - **Thực đơn mẫu A–I** (Việt, Nhật, Hàn, Âu, ăn ngoài, ngày nghỉ): khẩu phần tự co giãn theo mục tiêu Kcal/Protein hiện hành. Thêm từng bữa hoặc cả ngày bằng 1 chạm.

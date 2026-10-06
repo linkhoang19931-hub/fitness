@@ -312,6 +312,7 @@ const TABLE_LABEL = {
   bodyMetrics: 'Số đo cân nặng',
   checkinPhotos: 'Ảnh check-in',
   foodPresets: 'Món của tôi',
+  dayPlans: 'Thực đơn theo ngày',
 };
 
 function BackupCard({ showToast }) {
