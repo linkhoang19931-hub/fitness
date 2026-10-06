@@ -6,7 +6,7 @@ import { compressPhoto } from '../lib/image';
 import { useSettings } from '../lib/store';
 import { addDays, fmtDate, fmtNum, fmtShort, movingAverage7 } from '../lib/utils';
 import { useToday } from '../lib/useToday';
-import { Button, Card, GroupLabel, NumField, Rings, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
+import { AnimatedNumber, SwipeRow, Button, Card, GroupLabel, NumField, Rings, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
 import { IconCamera, IconTrash } from '../components/Icons';
 
 export default function Body() {
@@ -74,7 +74,7 @@ function WeightCard({ showToast }) {
         <div className="flex items-center gap-5">
           <Rings size={128} stroke={14} rings={[{ value: progress / 100, color: 'var(--go)' }]}>
             <div>
-              <div className="text-[28px] font-bold font-rounded tnum leading-none">{Math.round(progress)}%</div>
+              <div className="text-[28px] font-bold font-rounded tnum leading-none"><AnimatedNumber value={progress} />%</div>
               <div className="text-[11px] text-muted mt-1">tới mục tiêu</div>
             </div>
           </Rings>
@@ -165,7 +165,8 @@ function WeightCard({ showToast }) {
                 const prev = arr[i + 1];
                 const diff = prev ? e.weightKg - prev.weightKg : null;
                 return (
-                  <div key={e.id} className="flex items-center gap-3 min-h-[48px] hairline-b last:shadow-none">
+                  <SwipeRow key={e.id} className="-mx-4 hairline-b last:shadow-none" onDelete={() => setDel(e)}>
+                  <div className="flex items-center gap-3 min-h-[48px] px-4">
                     <span className="w-20 text-[15px] text-muted">{fmtDate(e.date)}</span>
                     <span className="flex-1 text-[17px] font-semibold font-rounded tnum">{fmtNum(e.weightKg)} kg</span>
                     {diff !== null && (
@@ -178,6 +179,7 @@ function WeightCard({ showToast }) {
                       <IconTrash size={18} />
                     </button>
                   </div>
+                  </SwipeRow>
                 );
               })}
           </Card>

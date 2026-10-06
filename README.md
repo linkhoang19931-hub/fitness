@@ -53,6 +53,10 @@ Sau lần mở đầu tiên có mạng, app chạy hoàn toàn offline (kể c�
 
 Thiết kế theo phong cách iOS: tiêu đề lớn, thẻ nhóm bo góc, thanh tab mờ, màu hệ thống iOS, chế độ Tự động/Tối/Sáng. Icon app và bộ icon trong app được vẽ riêng cho Baki Goal.
 
+## Hiệu ứng & cảm giác dùng
+
+Dùng thư viện Motion: chuyển tab trượt nhẹ, bảng kéo lên có lò xo (vuốt thanh trên xuống để đóng), vuốt sang trái để xoá (món ăn, món ngoài thực đơn, số đo cân), số chạy khi thay đổi, tick set có hiệu ứng nảy, thẻ bài/set thêm bớt có chuyển động, đồng hồ nghỉ trượt lên, màn chúc mừng có pháo giấy và kỷ lục mới khi lưu buổi tập. Rung nhẹ khi chạm (iPhone iOS 18+ qua công tắc hệ thống). Tự tắt hiệu ứng khi máy bật "Giảm chuyển động".
+
 ## Mục tiêu tự động
 
 Cài đặt chỉnh xong bấm **Lưu cài đặt** mới áp dụng (thanh lưu hiện khi có thay đổi; tab Cài đặt có chấm đỏ nếu còn thay đổi chưa lưu).

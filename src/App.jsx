@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { MotionConfig, motion } from 'motion/react';
+import { haptic } from './components/ui';
 import { useDraft, useSettings } from './lib/store';
 import Workout from './screens/Workout';
 import Nutrition from './screens/Nutrition';
@@ -56,18 +58,34 @@ export default function App() {
   }, []);
 
   const current = TABS.find((t) => t.id === tab) || TABS[0];
+  // hướng trượt khi chuyển tab: sang phải nếu tab mới nằm bên phải
+  const prevIdx = useRef(TABS.indexOf(current));
+  const idx = TABS.indexOf(current);
+  const dir = idx === prevIdx.current ? 0 : idx > prevIdx.current ? 1 : -1;
+  useEffect(() => {
+    prevIdx.current = idx;
+  }, [idx]);
   const Screen = current.Screen;
   const now = new Date();
   const dateLine = `${WEEKDAY[now.getDay()]}, ${now.getDate()} tháng ${now.getMonth() + 1}`;
 
   return (
-    <div className="min-h-full">
+    <MotionConfig reducedMotion="user">
+    <div className="min-h-full overflow-x-clip">
       <main className="mx-auto max-w-lg px-4 pb-[calc(110px+env(safe-area-inset-bottom))]">
-        <header className="pt-[calc(14px+env(safe-area-inset-top))] pb-3">
-          <div className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted">{dateLine}</div>
-          <h1 className="text-[34px] leading-[1.15] font-bold tracking-[-0.03em]">{current.title}</h1>
-        </header>
-        <Screen />
+        {/* Chỉ hiệu ứng vào (không chờ màn cũ thoát) để chuyển tab luôn tức thì */}
+        <motion.div
+          key={current.id}
+          initial={dir === 0 ? false : { opacity: 0, x: dir * 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ x: { type: 'spring', damping: 32, stiffness: 420 }, opacity: { duration: 0.16 } }}
+        >
+          <header className="pt-[calc(14px+env(safe-area-inset-top))] pb-3">
+            <div className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted">{dateLine}</div>
+            <h1 className="text-[34px] leading-[1.15] font-bold tracking-[-0.03em]">{current.title}</h1>
+          </header>
+          <Screen />
+        </motion.div>
       </main>
 
       <RestTimer />
@@ -80,16 +98,19 @@ export default function App() {
             return (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => {
+                  if (t.id !== tab) haptic();
+                  setTab(t.id);
+                }}
                 className={`h-[56px] flex flex-col items-center justify-center gap-0.5 transition-colors ${on ? 'text-accent' : 'text-faint'}`}
                 aria-current={on ? 'page' : undefined}
               >
-                <span className="relative">
+                <motion.span className="relative" animate={on ? { scale: [1, 0.82, 1.08, 1] } : { scale: 1 }} transition={{ duration: 0.35 }}>
                   <Icon size={28} filled={on} />
                   {t.id === 'settings' && unsaved && (
                     <span className="absolute -top-0.5 -right-1 h-2.5 w-2.5 rounded-full" style={{ background: 'var(--danger)' }} aria-label="Có thay đổi chưa lưu" />
                   )}
-                </span>
+                </motion.span>
                 <span className="text-[10px] font-medium tracking-[0.01em]">{t.label}</span>
               </button>
             );
@@ -97,5 +118,6 @@ export default function App() {
         </div>
       </nav>
     </div>
+    </MotionConfig>
   );
 }

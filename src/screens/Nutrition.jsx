@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, kcalOf } from '../lib/db';
 import { useSettings } from '../lib/store';
 import { useTargets } from '../lib/targets';
 import { addDays, fmtDate, fmtNum } from '../lib/utils';
 import { useToday } from '../lib/useToday';
-import { Button, Card, GroupLabel, MacroBar, NumField, Rings, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
+import { AnimatedNumber, Button, Card, GroupLabel, MacroBar, NumField, Rings, Segmented, Sheet, SwipeRow, Switch, TextField, haptic, useToast } from '../components/ui';
 import { FOOD_BY_ID, FOOD_GROUPS, FOODS, SRC_LABEL, normalize, searchFoods } from '../lib/foods';
 import { MEAL_PLANS, planTotals, scalePlan } from '../lib/mealplans';
 import {
@@ -122,20 +123,29 @@ export default function Nutrition() {
             Thực đơn · {planned.toLocaleString('vi-VN')} kcal
           </GroupLabel>
           <div className="space-y-2.5">
+            <AnimatePresence initial={false}>
             {dp.meals.map((m) => (
+              <motion.div key={m.key} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ type: 'spring', damping: 28, stiffness: 320 }}>
               <MealCard
                 key={m.key}
                 meal={m}
                 next={m.key === nextKey}
                 onToggle={async () => {
+                  haptic();
                   await setMealEaten(dp, m.key, !m.eaten);
                   showToast(m.eaten ? `Bỏ đánh dấu ${m.name.toLowerCase()}` : `Đã ghi ${m.name.toLowerCase()} vào nhật ký`);
                 }}
                 onItem={(it) => setItemSheet({ mealKey: m.key, uid: it.uid })}
                 onAdd={() => setAddTo(m.key)}
                 onRemoveMeal={() => removeMeal(dp, m.key)}
+                onRemoveItem={(it) => {
+                  removeItem(dp, m.key, it.uid);
+                  showToast(`Đã xoá ${it.name}`);
+                }}
               />
+              </motion.div>
             ))}
+            </AnimatePresence>
           </div>
           <div className="flex gap-2 mt-2.5">
             <Button
@@ -184,7 +194,8 @@ export default function Nutrition() {
           </button>
         ) : (
           extras.map((l) => (
-            <button key={l.id} className="w-full flex items-center gap-3 py-2.5 hairline-b last:shadow-none text-left" onClick={() => setLogSheet(l.id)}>
+            <SwipeRow key={l.id} className="-mx-4 hairline-b last:shadow-none" onDelete={() => db.nutritionLogs.delete(l.id)}>
+            <button className="w-full flex items-center gap-3 py-2.5 px-4 text-left" onClick={() => setLogSheet(l.id)}>
               <div className="flex-1 min-w-0">
                 <div className="text-[16px] truncate">{l.mealName}</div>
                 <MacroLine p={l.protein} f={l.fat} c={l.carbs} />
@@ -192,6 +203,7 @@ export default function Nutrition() {
               <span className="text-[15px] font-semibold font-rounded tnum">{l.calories}</span>
               <IconChevron size={14} className="text-faint" />
             </button>
+            </SwipeRow>
           ))
         )}
       </Card>
@@ -246,14 +258,16 @@ export default function Nutrition() {
 }
 
 /* ---------- Một bữa trong thực đơn ---------- */
-function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal }) {
+function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveItem }) {
   const tot = mealTotals(meal);
   const k = totalsKcal(tot);
+  const bg = meal.eaten ? 'color-mix(in srgb, var(--go) 9%, var(--surface))' : 'var(--surface)';
   return (
     <Card
       className="!p-0 overflow-hidden"
       style={{
-        background: meal.eaten ? 'color-mix(in srgb, var(--go) 9%, var(--surface))' : undefined,
+        background: bg,
+        transition: 'background-color 300ms',
         boxShadow: next ? 'inset 0 0 0 2px var(--accent)' : undefined,
       }}
     >
@@ -268,29 +282,48 @@ function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal }) {
             {k} kcal · P {Math.round(tot.protein)} · F {fmtNum(tot.fat)} · C {Math.round(tot.carbs)}
           </div>
         </div>
-        <button
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          animate={meal.eaten ? { scale: [1, 1.1, 1] } : { scale: 1 }}
+          transition={{ duration: 0.3 }}
           onClick={onToggle}
           disabled={!meal.items.length}
           aria-pressed={meal.eaten}
           aria-label={meal.eaten ? `Bỏ đánh dấu ${meal.name}` : `Đã ăn ${meal.name}`}
-          className="press flex items-center gap-1.5 h-10 pl-2.5 pr-3 rounded-full text-[14px] font-semibold disabled:opacity-40"
+          className="flex items-center gap-1.5 h-10 pl-2.5 pr-3 rounded-full text-[14px] font-semibold disabled:opacity-40"
           style={meal.eaten ? { background: 'var(--go)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--ink)' }}
         >
           <span
             className="h-6 w-6 rounded-full grid place-items-center"
             style={meal.eaten ? { background: 'rgba(255,255,255,.25)' } : { boxShadow: 'inset 0 0 0 2px var(--faint)' }}
           >
-            {meal.eaten && <IconCheck size={15} />}
+            <AnimatePresence>
+              {meal.eaten && (
+                <motion.span key="c" initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ type: 'spring', damping: 12, stiffness: 420 }}>
+                  <IconCheck size={15} />
+                </motion.span>
+              )}
+            </AnimatePresence>
           </span>
           {meal.eaten ? 'Đã ăn' : 'Ăn rồi'}
-        </button>
+        </motion.button>
       </div>
-      <ul className="px-4">
+      <ul>
+        <AnimatePresence initial={false}>
         {meal.items.map((it) => {
           const m = itemMacros(it);
           return (
-            <li key={it.uid}>
-              <button className="w-full flex items-center gap-3 py-2.5 text-left hairline-t" onClick={() => onItem(it)}>
+            <motion.li
+              key={it.uid}
+              layout="position"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22 }}
+              className="overflow-hidden"
+            >
+              <SwipeRow bg={bg} onDelete={() => onRemoveItem(it)}>
+              <button className="w-full flex items-center gap-3 py-2.5 px-4 text-left hairline-t" onClick={() => onItem(it)}>
                 <span className="flex-1 min-w-0">
                   <span className="block text-[16px] leading-snug">
                     {it.name}
@@ -301,9 +334,11 @@ function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal }) {
                 <span className="text-[15px] font-semibold font-rounded tnum">{itemKcal(it)}</span>
                 <IconChevron size={14} className="text-faint" />
               </button>
-            </li>
+              </SwipeRow>
+            </motion.li>
           );
         })}
+        </AnimatePresence>
       </ul>
       <div className="flex items-center px-2 pb-1.5 hairline-t">
         <button className="press flex items-center gap-1 min-h-11 px-2 text-[15px] font-medium text-accent" onClick={onAdd}>
@@ -717,7 +752,7 @@ function Summary({ sum, t }) {
         >
           <div>
             <div className="text-[26px] font-bold font-rounded tnum leading-none tracking-[-0.03em]" style={{ color: left < 0 ? 'var(--warn)' : undefined }}>
-              {Math.abs(left).toLocaleString('vi-VN')}
+              <AnimatedNumber value={Math.abs(left)} />
             </div>
             <div className="text-[11px] text-muted mt-1">{left >= 0 ? 'kcal còn lại' : 'kcal vượt'}</div>
           </div>
@@ -754,7 +789,7 @@ function Legend({ label, color, value, target, alert }) {
         {label}
       </div>
       <div className="font-rounded tnum leading-tight" style={{ color: alert ? color : undefined }}>
-        <span className="text-[22px] font-bold tracking-[-0.02em]">{Math.round(value)}</span>
+        <AnimatedNumber className="text-[22px] font-bold tracking-[-0.02em]" value={value} />
         <span className="text-[13px] text-muted"> / {target} g</span>
       </div>
     </div>

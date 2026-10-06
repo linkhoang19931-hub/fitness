@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { DAY_COLORS, dayOf, editDay, getProgram, nextDayIndex, programOfWorkout, unitOf } from '../lib/program';
 import { MUSCLE_LABEL, dayGroups, groupsOf } from '../lib/exercises';
 import AddExercise, { exerciseInfo } from '../components/AddExercise';
-import { Switch } from '../components/ui';
+import Celebration, { useCelebrate } from '../components/Celebration';
+import { Switch, haptic } from '../components/ui';
 import { useRest, useSettings } from '../lib/store';
 import { addDays, fmtDate, fmtNum, fmtClock, fmtW, unlockAudio, weekStart } from '../lib/utils';
 import { useToday } from '../lib/useToday';
@@ -37,7 +39,13 @@ export default function Workout() {
   const active = useLiveQuery(() => activeWorkout(), []);
   const today = useToday();
   if (active === undefined) return null;
-  if (!active) return <Planner />;
+  if (!active)
+    return (
+      <>
+        <Planner />
+        <Celebration />
+      </>
+    );
   // Buổi bắt đầu từ hơn 4 giờ trước hoặc từ hôm trước mà chưa bấm kết thúc
   const stale = Date.now() - active.startedAt > STALE_HOURS * 3600000 || active.date !== today;
   return stale ? <StaleSession workout={active} today={today} /> : <ActiveSession workout={active} />;
@@ -595,7 +603,16 @@ function ActiveSession({ workout }) {
     <div className="space-y-3 pb-28">
       <SessionHeader workout={workout} day={day} done={done} total={total} wake={wake} onFinish={() => setSheet('finish')} />
 
+      <AnimatePresence initial={false}>
       {groups.map(([name, g]) => (
+        <motion.div
+          key={name}
+          layout
+          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -40, transition: { duration: 0.2 } }}
+          transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+        >
         <ExerciseCard
           key={name}
           workout={workout}
@@ -606,7 +623,9 @@ function ActiveSession({ workout }) {
           prevDate={prev?.dates?.[name]}
           onGuide={() => setGuide(name)}
         />
+        </motion.div>
       ))}
+      </AnimatePresence>
       <GuideSheet name={guide} onClose={() => setGuide(null)} />
 
       <Button variant="ghost" className="w-full flex items-center justify-center gap-1.5" onClick={() => setAdding(true)}>
@@ -656,7 +675,8 @@ function ActiveSession({ workout }) {
             style={{ background: done ? 'var(--go)' : undefined }}
             onClick={async () => {
               useRest.getState().stop();
-              await finishWorkout(workout.id);
+              const saved = await finishWorkout(workout.id);
+              if (saved) useCelebrate.getState().show(workout.id);
             }}
           >
             {done ? 'Lưu & kết thúc' : 'Thoát (chưa tập set nào, không lưu)'}
@@ -773,6 +793,7 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
   }, [note]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async (s, i) => {
+    haptic();
     if (s.isCompleted) {
       await db.exerciseLogs.update(s.id, { isCompleted: 0 });
       return;
@@ -812,11 +833,20 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
         <span />
       </div>
       <div className="space-y-2">
+        <AnimatePresence initial={false}>
         {sets.map((s, i) => {
           const ref = prevSets[i];
           const done = !!s.isCompleted;
           return (
-            <div key={s.id} className={`grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center ${done ? '[&_input]:bg-transparent [&_input]:text-muted' : ''}`}>
+            <motion.div
+              key={s.id}
+              layout="position"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22 }}
+              className={`grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center ${done ? '[&_input]:bg-transparent [&_input]:text-muted' : ''}`}
+            >
               <span className="text-center font-semibold font-rounded tnum text-[17px]" style={{ color: done ? 'var(--go)' : 'var(--muted)' }}>
                 {s.setIndex}
               </span>
@@ -837,18 +867,23 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
                 onCommit={(v) => db.exerciseLogs.update(s.id, { reps: v === null ? null : Math.round(v) })}
                 aria-label={`Reps set ${s.setIndex}`}
               />
-              <button
+              <motion.button
                 onClick={() => toggle(s, i)}
                 aria-pressed={done}
                 aria-label={`Hoàn thành set ${s.setIndex}`}
-                className="press h-12 w-[3.25rem] rounded-[12px] grid place-items-center transition-colors"
-                style={done ? { background: 'var(--go)', color: '#fff' } : { background: 'var(--surface-2)', color: 'var(--faint)' }}
+                className="h-12 w-[3.25rem] rounded-[12px] grid place-items-center"
+                whileTap={{ scale: 0.88 }}
+                animate={done ? { scale: [1, 1.16, 1], backgroundColor: 'var(--go)', color: '#ffffff' } : { scale: 1, backgroundColor: 'var(--surface-2)', color: 'var(--faint)' }}
+                transition={{ duration: 0.3 }}
               >
-                <IconCheck size={24} />
-              </button>
-            </div>
+                <motion.span initial={false} animate={done ? { rotate: [-20, 0], scale: [0.6, 1] } : { rotate: 0, scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 400 }}>
+                  <IconCheck size={24} />
+                </motion.span>
+              </motion.button>
+            </motion.div>
           );
         })}
+        </AnimatePresence>
       </div>
 
       <div className="flex items-center gap-1 mt-2.5 -mx-1">

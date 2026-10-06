@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { DEFAULT_SETTINGS, LOSS_RATES, macroTargets, pickSettings, sanitize, useDraft, useSettings } from '../lib/store';
 import { useLatestWeight } from '../lib/targets';
 import { exportJSON, exportNutritionCSV, exportWeightCSV, exportWorkoutCSV, readBackupFile, resetDB, restoreJSON } from '../lib/backup';
-import { Button, Card, GroupLabel, NumField, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
+import { AnimatedNumber, Button, Card, GroupLabel, NumField, Segmented, Sheet, Switch, TextField, useToast } from '../components/ui';
 import { IconFlame } from '../components/Icons';
 import { DAY_COLORS, JOBS, TRAINING_DAYS, getProgram } from '../lib/program';
 import { fmtNum, todayStr, addDays, fmtDate } from '../lib/utils';
@@ -76,7 +78,7 @@ export default function Settings() {
           <div className="text-[13px] font-semibold text-accent">Mục tiêu mỗi ngày</div>
           <div className="flex items-baseline gap-1.5 mt-0.5">
             <IconFlame size={22} style={{ color: 'var(--warn)' }} />
-            <span className="text-[40px] font-bold font-rounded tnum tracking-[-0.03em] leading-none">{t.kcal.toLocaleString('vi-VN')}</span>
+            <AnimatedNumber className="text-[40px] font-bold font-rounded tnum tracking-[-0.03em] leading-none" value={t.kcal} />
             <span className="text-[17px] text-muted">kcal</span>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-3">
@@ -239,8 +241,17 @@ export default function Settings() {
 
       <BackupCard showToast={showToast} />
       <StorageCard />
-      {dirty && (
-        <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5">
+      {createPortal(
+        <AnimatePresence>
+          {dirty && (
+            <motion.div
+              key="savebar"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+              className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5"
+            >
           <div className="mx-auto max-w-lg rounded-[22px] material shadow-[0_10px_40px_rgba(0,0,0,0.3)] border border-line/60 p-2.5 flex items-center gap-2">
             <span className="flex-1 pl-2 text-[13px] text-muted leading-tight">
               Chưa lưu · mục tiêu mới <b className="text-ink font-rounded tnum">{t.kcal.toLocaleString('vi-VN')} kcal</b>
@@ -252,7 +263,10 @@ export default function Settings() {
               Lưu cài đặt
             </button>
           </div>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
       {toast}
     </div>

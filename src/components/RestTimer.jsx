@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useRest, useSettings } from '../lib/store';
 import { beep, fmtClock, vibrate } from '../lib/utils';
 
@@ -40,13 +41,21 @@ export default function RestTimer() {
     }
   }, [remaining, endAt, soundOn, vibrateOn, stop]);
 
-  if (!endAt) return null;
   const pct = total ? Math.max(0, Math.min(1, remaining / total)) : 0;
   const R = 22;
   const C = 2 * Math.PI * R;
 
   return (
-    <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5">
+    <AnimatePresence>
+    {endAt && (
+    <motion.div
+      key="rest"
+      className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 px-3 pb-2.5"
+      initial={{ y: 120, opacity: 0 }}
+      animate={{ y: 0, opacity: 1, scale: done ? [1, 1.04, 1] : 1 }}
+      exit={{ y: 120, opacity: 0 }}
+      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+    >
       <div className="mx-auto max-w-lg rounded-[22px] material shadow-[0_10px_40px_rgba(0,0,0,0.35)] border border-line/60">
         <div className="flex items-center gap-3 p-2.5 pl-3">
           <div className="relative h-[54px] w-[54px] shrink-0">
@@ -93,6 +102,8 @@ export default function RestTimer() {
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   );
 }
