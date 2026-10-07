@@ -8,13 +8,45 @@ import { addDays, fmtDate, fmtNum, fmtShort, movingAverage7 } from '../lib/utils
 import { useToday } from '../lib/useToday';
 import { AnimatedNumber, SwipeRow, Button, Card, GroupLabel, NumField, Rings, Segmented, Sheet, useObjectURL, useToast } from '../components/ui';
 import { IconCamera, IconTrash } from '../components/Icons';
+import Measurements from '../components/Measurements';
+import WeeklyReview from '../components/WeeklyReview';
 
 export default function Body() {
   const [toast, showToast] = useToast();
+  const [view, setView] = useState(() => {
+    try {
+      return sessionStorage.getItem('body-view') || 'progress';
+    } catch {
+      return 'progress';
+    }
+  });
+  const pick = (v) => {
+    setView(v);
+    try {
+      sessionStorage.setItem('body-view', v);
+    } catch {}
+  };
   return (
     <div>
-      <WeightCard showToast={showToast} />
-      <PhotoSection showToast={showToast} />
+      <div className="mb-3">
+        <Segmented
+          value={view}
+          onChange={pick}
+          options={[
+            { value: 'progress', label: 'Tiến độ' },
+            { value: 'week', label: 'Tổng kết tuần' },
+          ]}
+        />
+      </div>
+      {view === 'week' ? (
+        <WeeklyReview showToast={showToast} />
+      ) : (
+        <>
+          <WeightCard showToast={showToast} />
+          <Measurements showToast={showToast} />
+          <PhotoSection showToast={showToast} />
+        </>
+      )}
       {toast}
     </div>
   );

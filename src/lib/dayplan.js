@@ -182,3 +182,57 @@ export function alternatives(item, list) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
 }
+
+// ---- Ghi nhanh ----
+// Thêm nhiều món một lần (combo)
+export const addItems = (dp, mealKey, items) => saveMeal(dp, mealKey, (m) => ({ ...m, items: [...m.items, ...items.map((it) => ({ ...it, uid: uid() }))] }));
+
+// "Ăn giống hôm qua": bữa đã ăn hôm nay giữ nguyên, các bữa chưa ăn thay bằng thực đơn của ngày nguồn
+export async function copyDayPlan(dp, fromDate) {
+  const src = await db.dayPlans.get(fromDate);
+  if (!src?.meals?.length) return false;
+  const cur = (await db.dayPlans.get(dp.date)) || dp;
+  const eaten = cur.meals.filter((m) => m.eaten);
+  const stamp = Date.now().toString(36);
+  const fresh = src.meals
+    .filter((m) => m.items.length && !eaten.some((e) => e.name === m.name))
+    .map((m, i) => ({ key: `c${stamp}${i}`, time: m.time, name: m.name, eaten: false, items: m.items.map((it) => ({ ...it, uid: uid() })) }));
+  const meals = [...eaten, ...fresh].sort((a, b) => toMin(a.time) - toMin(b.time));
+  await db.dayPlans.put({ ...cur, planId: src.planId, mode: src.mode, meals });
+  return true;
+}
+
+// Món hay ăn trong 30 ngày: từ các bữa đã đánh dấu ăn + món ghi ngoài thực đơn
+export async function frequentItems(today, days = 30, limit = 8) {
+  const from = new Date(new Date(today + 'T00:00:00').getTime() - days * 86400000).toISOString().slice(0, 10);
+  const plans = await db.dayPlans.where('date').between(from, today, true, true).toArray();
+  const extras = await db.nutritionLogs.where('date').between(from, today, true, true).filter((l) => !l.planKey).toArray();
+  const map = new Map();
+  const bump = (key, item, date) => {
+    const cur = map.get(key);
+    if (!cur) map.set(key, { item, count: 1, last: date });
+    else {
+      cur.count++;
+      if (date >= cur.last) {
+        cur.last = date;
+        cur.item = item;
+      }
+    }
+  };
+  for (const p of plans) for (const m of p.meals) if (m.eaten) for (const it of m.items) bump(it.foodId || `n:${it.name}`, { foodId: it.foodId, name: it.name, n: it.n, protein: it.protein, fat: it.fat, carbs: it.carbs }, p.date);
+  for (const l of extras) bump(`n:${l.mealName}`, { foodId: null, name: l.mealName, n: 1, protein: +l.protein || 0, fat: +l.fat || 0, carbs: +l.carbs || 0 }, l.date);
+  return [...map.values()]
+    .filter((x) => x.count >= 2)
+    .sort((a, b) => b.count - a.count || b.last.localeCompare(a.last))
+    .slice(0, limit)
+    .map((x) => ({ ...x.item, uid: uid(), count: x.count }));
+}
+
+export async function saveCombo(name, items) {
+  return db.combos.add({
+    name: name.trim(),
+    items: items.map(({ foodId, name, n, protein, fat, carbs }) => ({ foodId: foodId || null, name, n, protein, fat, carbs })),
+    createdAt: Date.now(),
+  });
+}
+export const comboTotals = (c) => mealTotals({ items: c.items });

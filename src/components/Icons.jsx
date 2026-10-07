@@ -179,3 +179,14 @@ export const IconSunrise = (p) => (
     </g>
   </Svg>
 );
+export const IconDrop = (p) => (
+  <Svg {...p}>
+    <path d="M12 3.5c3.2 4 6 7.3 6 10.6A6 6 0 0 1 6 14.1c0-3.3 2.8-6.6 6-10.6Z" {...stroke(1.9)} />
+    <path d="M9.2 14.6a2.9 2.9 0 0 0 2.6 2.6" {...stroke(1.6)} />
+  </Svg>
+);
+export const IconChart = (p) => (
+  <Svg {...p}>
+    <path d="M5 19.5V11M10 19.5V5.5M15 19.5v-6M20 19.5V9" {...stroke(2.2)} />
+  </Svg>
+);

@@ -33,7 +33,17 @@ db.version(3).stores({
   sleeps: '++id, wakeDate, start',
 });
 
-export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets', 'dayPlans', 'sleeps'];
+// v4: số đo cơ thể, nước uống, combo món ăn
+//  measurements: { id, date, waist, neck, hip, chest, arm, thigh }  (cm; mỗi ngày 1 bản ghi)
+//  water: { id, date, ml, at }
+//  combos: { id, name, items: [{ foodId, name, n, protein, fat, carbs }], createdAt }
+db.version(4).stores({
+  measurements: '++id, date',
+  water: '++id, date',
+  combos: '++id, name',
+});
+
+export const TABLES = ['workouts', 'exerciseLogs', 'nutritionLogs', 'bodyMetrics', 'checkinPhotos', 'foodPresets', 'dayPlans', 'sleeps', 'measurements', 'water', 'combos'];
 
 export const DEFAULT_PRESETS = [
   { name: 'Cơm trắng (200g)', protein: 5.4, fat: 0.6, carbs: 56 },

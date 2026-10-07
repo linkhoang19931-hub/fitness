@@ -30,6 +30,8 @@ import {
 import { Button, Card, GroupLabel, NumField, Sheet } from '../components/ui';
 import { IconCheck, IconChevron, IconDumbbell, IconInfo, IconTimer } from '../components/Icons';
 import { guideFor, videoUrl } from '../lib/guides';
+import { DeloadCard, DeloadLine, StrengthPanel, SuggestionBox, useDeload } from '../components/Strength';
+import { isCompound, isDeloadActive, suggestNext } from '../lib/strength';
 
 const SESSION_MIN = 50;
 
@@ -155,6 +157,7 @@ function Planner() {
   const [busy, setBusy] = useState(false);
   const color = DAY_COLORS[dayIndex];
   const todayDone = week.filter((w) => w.date === today);
+  const deload = useDeload();
 
   // Gợi ý bắt đầu lại từ D1 khi sang tuần mới mà chu kỳ trước dở dang
   const mondayTs = new Date(monday + 'T00:00:00').getTime();
@@ -196,6 +199,7 @@ function Planner() {
           </div>
         </Card>
       )}
+      <DeloadCard status={deload} />
       <Card className="overflow-hidden !p-0">
         <div className="p-4 pb-3" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 16%, transparent), transparent)` }}>
           <div className="flex items-center gap-3.5">
@@ -320,6 +324,7 @@ function Planner() {
         </b>
         . Đổi giới tính hoặc số buổi trong Cài đặt. Chu kỳ xoay theo buổi đã hoàn thành, không theo thứ trong tuần: nghỉ một hôm thì buổi sau vẫn là nhóm cơ kế tiếp. Chạm một nhóm cơ khác để tập buổi đó hôm nay; buổi sau sẽ nối tiếp từ nhóm cơ bạn vừa tập.
       </p>
+      <DeloadLine status={deload} />
 
       <GuideSheet name={guide} onClose={() => setGuide(null)} />
 
@@ -387,6 +392,7 @@ function GuideSheet({ name, onClose }) {
     ) : null;
   return (
     <Sheet open={!!name} onClose={onClose} title={name || ''}>
+      <StrengthPanel name={name} />
       {g ? (
         <div className="pb-2">
           <div className="grid grid-cols-2 gap-2">
@@ -588,6 +594,8 @@ function ActiveSession({ workout }) {
   const [sheet, setSheet] = useState(null); // 'finish' | 'switch' | 'discard'
   const [guide, setGuide] = useState(null);
   const [adding, setAdding] = useState(false);
+  const deloadStart = useSettings((s) => s.deloadStart);
+  const deload = isDeloadActive(deloadStart, workout.date);
 
   const groups = useMemo(() => {
     const g = {};
@@ -621,6 +629,7 @@ function ActiveSession({ workout }) {
           sets={g.sets}
           prevSets={prev?.byExercise?.[name] || []}
           prevDate={prev?.dates?.[name]}
+          suggestion={prev ? suggestNext(name, [prev.byExercise?.[name], prev.older?.[name]], { deload }) : null}
           onGuide={() => setGuide(name)}
         />
         </motion.div>
@@ -771,7 +780,7 @@ function SessionHeader({ workout, day, done, total, wake, onFinish }) {
   );
 }
 
-function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide }) {
+function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, suggestion, onGuide }) {
   const restSeconds = useSettings((s) => s.restSeconds);
   const startRest = useRest((s) => s.start);
   const [note, setNote] = useState(workout.notes?.[name] || '');
@@ -825,6 +834,19 @@ function ExerciseCard({ workout, name, order, sets, prevSets, prevDate, onGuide 
           ? `Lần trước ${fmtDate(prevDate)}: ${prevSets.map((s) => (unit ? `${s.reps ?? '–'} ${unit}` : `${fmtW(s.weightKg)}×${s.reps ?? '–'}`)).join('  ')}`
           : 'Chưa có dữ liệu buổi trước'}
       </p>
+      {!unit && (
+        <SuggestionBox
+          name={name}
+          suggestion={suggestion}
+          canFill={sets.some((x) => !x.isCompleted)}
+          workWeight={isCompound(name) ? suggestion?.weight || Math.max(0, ...sets.map((x) => +x.weightKg || 0), ...prevSets.map((x) => +x.weightKg || 0)) : 0}
+          onFill={async (w) => {
+            await db.transaction('rw', db.exerciseLogs, async () => {
+              for (const x of sets) if (!x.isCompleted) await db.exerciseLogs.update(x.id, { weightKg: w });
+            });
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-[2rem_1fr_1fr_3.25rem] gap-2 items-center text-[12px] font-medium text-muted mb-1 px-0.5">
         <span className="text-center">Set</span>

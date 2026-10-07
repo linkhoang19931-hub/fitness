@@ -202,6 +202,7 @@ export const EXERCISES = RAW.map(([name, groups, eq, tip, unit, kw]) => {
     name,
     groups: g,
     equipment: EQ[eq] || '',
+    eq,
     tip,
     unit: unit || null,
     search: normalize(`${name} ${kw || ''} ${g.map((x) => MUSCLE_LABEL[x]).join(' ')} ${EQ[eq] || ''}`),

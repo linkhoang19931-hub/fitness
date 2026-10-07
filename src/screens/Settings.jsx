@@ -63,6 +63,10 @@ export default function Settings() {
     if (('sex' in patch && patch.sex !== base.sex) || ('trainingDays' in patch && +patch.trainingDays !== +base.trainingDays)) {
       patch.cycleStartAt = Date.now();
     }
+    // đổi số buổi tập / công việc thì mức tiêu hao đo được trước đó không còn đúng → quay về công thức
+    if (('trainingDays' in patch && +patch.trainingDays !== +base.trainingDays) || ('job' in patch && patch.job !== base.job) || ('sex' in patch && patch.sex !== base.sex)) {
+      patch.tdeeOverride = null;
+    }
     saved.update(patch);
     clear();
     showToast('Đã lưu cài đặt');
@@ -87,7 +91,7 @@ export default function Settings() {
             <Pill label="Carbs" color="var(--carbs)" value={`${t.carbs}`} />
           </div>
           <p className="text-[13px] text-muted mt-3 leading-relaxed">
-            TDEE {t.tdee.toLocaleString('vi-VN')} kcal {t.tdeeFromProfile ? '(tính từ hồ sơ)' : '(nhập tay)'} − thâm hụt {t.deficit} kcal · cân hiện tại {fmtNum(t.weight)} kg.
+            TDEE {t.tdee.toLocaleString('vi-VN')} kcal {t.tdeeAdaptive ? `(đo từ cân nặng & ăn uống thực tế${s.tdeeOverride?.at ? `, chỉnh ${fmtDate(s.tdeeOverride.at, false)}` : ''})` : t.tdeeFromProfile ? '(tính từ hồ sơ)' : '(nhập tay)'} − thâm hụt {t.deficit} kcal · cân hiện tại {fmtNum(t.weight)} kg.
             {t.atGoal
               ? ' Bạn đã đạt cân mục tiêu: app chuyển sang ăn duy trì.'
               : eta
@@ -96,6 +100,11 @@ export default function Settings() {
             {t.floorHit && ' Thâm hụt đã được giới hạn để Kcal không thấp hơn mức chuyển hoá cơ bản.'}
             {s.fatCap < t.fatMin && ` Trần Fat ${s.fatCap}g đang thấp hơn mức khuyến nghị dài hạn ~${t.fatMin}g.`}
           </p>
+          {t.tdeeAdaptive && (
+            <button className="mt-2 text-[15px] font-medium text-accent min-h-10" onClick={() => { saved.update({ tdeeOverride: null }); showToast('Đã quay về TDEE tính theo công thức'); }}>
+              Quay về TDEE theo công thức{t.tdeeFormula ? ` (${t.tdeeFormula.toLocaleString('vi-VN')} kcal)` : ''}
+            </button>
+          )}
         </div>
       </Card>
 
@@ -328,6 +337,9 @@ const TABLE_LABEL = {
   foodPresets: 'Món của tôi',
   dayPlans: 'Thực đơn theo ngày',
   sleeps: 'Giấc ngủ',
+  measurements: 'Số đo vòng',
+  water: 'Nước uống',
+  combos: 'Combo món ăn',
 };
 
 function BackupCard({ showToast }) {

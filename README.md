@@ -63,6 +63,18 @@ Tab **Giấc ngủ**: bấm **Đi ngủ** khi lên giường, sáng bấm **Đã
 - **Dashboard** tuần / tháng / năm: biểu đồ cột tô màu theo mức (xanh = trong khuyến nghị, cam = chấp nhận được, đỏ = quá ít/nhiều), vùng khuyến nghị và đường mục tiêu; trung bình/đêm, nợ ngủ, giờ ngủ và giờ dậy trung bình; gợi ý theo từng kỳ (thiếu ngủ, giờ ngủ thất thường, ngủ muộn, nợ ngủ, chất lượng thấp).
 - Giờ nên lên giường tính từ giờ dậy thường ngày (mặc định 5:30 vì tập 6:00). Giấc ngắn ban ngày (9:00–19:00, <3 giờ) tính là ngủ trưa.
 
+## Tiến bộ & điều chỉnh (v4)
+
+- **Chỉnh calo theo thực tế**: sau ≥ 10 ngày ghi ăn đủ và ≥ 8 lần cân trải ≥ 14 ngày (cửa sổ 21 ngày), app đo TDEE thật = Kcal ăn TB − tốc độ đổi cân (hồi quy tuyến tính) × 7700. Đề xuất hiện ở tab Dinh dưỡng; mỗi lần chỉnh tối đa ±250 kcal, tối đa 1 lần/tuần. Đổi số buổi tập / công việc / giới tính thì quay về công thức.
+- **Gợi ý tăng tạ (double progression)**: khoảng rep lấy từ hướng dẫn bài; đủ đầu trên ở mọi set → tăng 2,5 kg (thân trên), 5 kg (thân dưới), 2 kg (tạ đơn); 2 buổi liền dưới khoảng rep → giảm ~10%. Nút “Điền” ghi mức tạ gợi ý vào các set.
+- **Biểu đồ sức mạnh**: 1RM ước tính (Epley) theo buổi, kỷ lục, 5 buổi gần nhất — trong bảng hướng dẫn của mỗi bài.
+- **Set khởi động**: thanh không × 10, 40% × 8, 60% × 5, 80% × 3 (bài compound ≥ 20 kg).
+- **Tuần giảm tải**: nhắc sau 6 tuần tập liên tục (nghỉ hẳn 1 tuần thì đếm lại); tuần giảm tải tự giảm nửa số set, tạ ~70%, và không dùng làm mốc so sánh.
+- **Số đo vòng & % mỡ**: công thức Hải quân Mỹ (nam: bụng ngang rốn + cổ; nữ: eo + mông + cổ; cần chiều cao), khối nạc ước tính, nhận xét mất mỡ/mất nạc.
+- **Tổng kết tuần** (tab Cơ thể): cân nặng, dinh dưỡng, tập luyện, sức mạnh, giấc ngủ, nước; calo mỗi ngày; số set theo nhóm cơ (chính 1, phụ 0,5; mục tiêu 10–20).
+- **Ghi món nhanh**: “Ăn giống hôm qua”, mục “Hay ăn” (30 ngày), combo lưu từ một bữa.
+- **Nước uống**: 35 ml/kg + 500 ml ngày tập; +250 / +500 / bớt lần cuối.
+
 ## Hiệu ứng & cảm giác dùng
 
 Dùng thư viện Motion: chuyển tab trượt nhẹ, bảng kéo lên có lò xo (vuốt thanh trên xuống để đóng), vuốt sang trái để xoá (món ăn, món ngoài thực đơn, số đo cân), số chạy khi thay đổi, tick set có hiệu ứng nảy, thẻ bài/set thêm bớt có chuyển động, đồng hồ nghỉ trượt lên, màn chúc mừng có pháo giấy và kỷ lục mới khi lưu buổi tập. Rung nhẹ khi chạm (iPhone iOS 18+ qua công tắc hệ thống). Tự tắt hiệu ứng khi máy bật "Giảm chuyển động".

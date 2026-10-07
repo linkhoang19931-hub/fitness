@@ -26,6 +26,10 @@ export const DEFAULT_SETTINGS = {
   weekPromptSeen: null,
   programEdits: {}, // bài thêm/bỏ theo từng buổi, áp dụng cho các lần sau
   cycleStartAt: null, // mốc "bắt đầu lại chu kỳ từ D1" (ms); dữ liệu cũ giữ nguyên
+  tdeeOverride: null, // { kcal, at: 'YYYY-MM-DD' } — TDEE đo từ cân nặng + ăn uống thực tế (đã duyệt)
+  deloadStart: null, // 'YYYY-MM-DD' ngày bắt đầu tuần giảm tải gần nhất
+  deloadSnooze: null, // 'YYYY-MM-DD' hoãn nhắc giảm tải tới ngày này
+  adaptiveSnooze: null, // 'YYYY-MM-DD' ẩn gợi ý chỉnh calo ở tab Dinh dưỡng tới ngày này
 };
 
 // Cấu hình người dùng — lưu LocalStorage qua Zustand persist (URD 2.1)
@@ -86,6 +90,7 @@ export function sanitize(raw) {
     deficitKcal: Number.isFinite(+s.deficitKcal) ? Math.min(1500, Math.max(0, +s.deficitKcal)) : 500,
     proteinMin: clamp(s.proteinMin, 20, 400, 140),
     proteinMax: clamp(Math.max(+s.proteinMax || 0, +s.proteinMin || 0), 20, 400, 160),
+    tdeeOverride: s.tdeeOverride && +s.tdeeOverride.kcal >= 1200 && +s.tdeeOverride.kcal <= 6000 ? { kcal: Math.round(+s.tdeeOverride.kcal), at: s.tdeeOverride.at || null } : null,
   };
 }
 
@@ -94,8 +99,9 @@ export function macroTargets(raw, currentWeight) {
   const W = currentWeight > 0 ? currentWeight : s.startWeight;
   const prof = calcTDEE({ sex: s.sex, age: s.age, heightCm: s.heightCm, weightKg: W, activity: s.activity });
   let tdee, deficit, proteinMin, proteinMax, floorHit = false, atGoal = false;
+  const adaptive = !!(s.autoTargets && s.tdeeOverride);
   if (s.autoTargets) {
-    tdee = prof?.tdee ?? s.maintenanceKcal;
+    tdee = s.tdeeOverride?.kcal ?? prof?.tdee ?? s.maintenanceKcal;
     atGoal = W <= s.goalWeight;
     deficit = atGoal ? 0 : Math.round((s.lossRate * KCAL_PER_KG) / 7 / 10) * 10;
     const floor = Math.max(s.sex === 'female' ? 1200 : 1500, prof?.bmr ?? 0);
@@ -131,6 +137,8 @@ export function macroTargets(raw, currentWeight) {
     deficit,
     weight: W,
     tdeeFromProfile: !!(s.autoTargets && prof),
+    tdeeAdaptive: adaptive,
+    tdeeFormula: prof?.tdee ?? null,
     bmr: prof?.bmr ?? null,
     weeklyLoss,
     weeks,

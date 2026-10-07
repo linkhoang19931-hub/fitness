@@ -2,6 +2,7 @@ import { db } from './db';
 import { dayOf, programById, programOfWorkout } from './program';
 import { todayStr } from './utils';
 import { useSettings } from './store';
+import { isDeloadActive } from './strength';
 
 // Buổi đã hoàn thành gần nhất (để suy ra nhóm cơ kế tiếp)
 // sinceTs: chỉ tính các buổi hoàn thành sau mốc "bắt đầu lại chu kỳ"
@@ -30,46 +31,53 @@ export async function activeWorkout() {
 // dùng làm tham chiếu "lần trước" và để điền sẵn số tạ.
 export async function previousByExercise(names, excludeId = null) {
   const done = (await db.workouts.toArray())
-    .filter((w) => w.completedAt && w.id !== excludeId)
+    // buổi trong tuần giảm tải (tạ nhẹ) không dùng làm mốc so sánh
+    .filter((w) => w.completedAt && w.id !== excludeId && !w.deload)
     .sort((a, b) => b.completedAt - a.completedAt)
     .slice(0, 120);
   const byExercise = {};
   const dates = {};
-  if (!done.length) return { byExercise, dates };
+  const older = {}; // buổi trước đó nữa (để nhận ra 2 buổi liền không đạt rep)
+  if (!done.length) return { byExercise, dates, older };
   const want = new Set(names);
   const logs = await db.exerciseLogs.where('workoutId').anyOf(done.map((w) => w.id)).filter((l) => !!l.isCompleted && want.has(l.exerciseName)).toArray();
   for (const w of done) {
     const mine = logs.filter((l) => l.workoutId === w.id);
     for (const name of want) {
-      if (byExercise[name]) continue;
+      if (older[name]) continue;
       const sets = mine.filter((l) => l.exerciseName === name).sort((a, b) => a.setIndex - b.setIndex);
-      if (sets.length) {
+      if (!sets.length) continue;
+      if (!byExercise[name]) {
         byExercise[name] = sets;
         dates[name] = w.date;
-      }
+      } else older[name] = sets;
     }
-    if (Object.keys(byExercise).length === want.size) break;
+    if (Object.keys(older).length === want.size) break;
   }
-  return { byExercise, dates };
+  return { byExercise, dates, older };
 }
 
 export async function startWorkout(programId, dayIndex) {
   const program = programById(programId);
   const day = dayOf(program, dayIndex, useSettings.getState().programEdits);
   const { byExercise } = await previousByExercise(day.exercises.map((e) => e.name));
+  // tuần giảm tải: một nửa số set
+  const deload = isDeloadActive(useSettings.getState().deloadStart, todayStr());
   return db.transaction('rw', db.workouts, db.exerciseLogs, async () => {
     const workoutId = await db.workouts.add({
       date: todayStr(),
       dayIndex: day.dayIndex,
       programId: program.id,
       targetMuscle: day.muscle,
+      deload,
       startedAt: Date.now(),
       completedAt: null,
       notes: {},
     });
     const rows = [];
     day.exercises.forEach(({ name, sets }, order) => {
-      const n = Math.max(sets, byExercise[name]?.length || 0);
+      const full = Math.max(sets, byExercise[name]?.length || 0);
+      const n = deload ? Math.max(1, Math.ceil(full / 2)) : full;
       for (let i = 1; i <= n; i++) {
         rows.push({ workoutId, exerciseName: name, exerciseOrder: order, setIndex: i, weightKg: null, reps: null, isCompleted: 0 });
       }

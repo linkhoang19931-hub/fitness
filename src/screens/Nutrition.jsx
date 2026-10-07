@@ -30,9 +30,16 @@ import {
   toMin,
   totalsKcal,
   updateItem,
+  addItems,
+  comboTotals,
+  copyDayPlan,
+  frequentItems,
+  saveCombo,
 } from '../lib/dayplan';
+import AdaptiveCard from '../components/Adaptive';
+import { addWater, fmtL, undoWater, waterGoal } from '../lib/water';
 import { activeWorkout } from '../lib/workout';
-import { IconBook, IconCheck, IconChevron, IconFlame, IconPlus, IconSearch, IconTrash } from '../components/Icons';
+import { IconBook, IconCheck, IconChevron, IconDrop, IconFlame, IconPlus, IconSearch, IconTrash } from '../components/Icons';
 
 const COLORS = { protein: 'var(--protein)', fat: 'var(--fat)', carbs: 'var(--carbs)' };
 const STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -73,6 +80,10 @@ export default function Nutrition() {
   const [addTo, setAddTo] = useState(null); // mealKey | 'extra'
   const [logSheet, setLogSheet] = useState(null); // log id
   const [planSheet, setPlanSheet] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [comboMeal, setComboMeal] = useState(null);
+  const yesterday = addDays(date, -1);
+  const yPlan = useLiveQuery(() => db.dayPlans.get(yesterday).then((x) => x ?? null), [yesterday]);
 
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const nextKey = isToday && dp ? (dp.meals.find((m) => !m.eaten && toMin(m.time) >= nowMin - 90) || dp.meals.find((m) => !m.eaten))?.key : null;
@@ -86,6 +97,15 @@ export default function Nutrition() {
       await addItem(dp, addTo, entry);
     }
     showToast(`Đã thêm ${entry.name}`);
+  };
+  const addMany = async (items, label) => {
+    if (addTo === 'extra' || !dp) {
+      const now = Date.now();
+      await db.nutritionLogs.bulkAdd(items.map((it, i) => ({ date, mealName: itemLabel(it), ...itemMacros(it), calories: itemKcal(it), createdAt: now + i })));
+    } else {
+      await addItems(dp, addTo, items);
+    }
+    showToast(`Đã thêm ${label}`);
   };
 
   const sheetMeal = itemSheet && dp?.meals.find((m) => m.key === itemSheet.mealKey);
@@ -110,6 +130,12 @@ export default function Nutrition() {
       </div>
 
       <Summary sum={sum} t={t} />
+      {isToday && (
+        <div className="mt-3">
+          <AdaptiveCard compact onApplied={(m) => showToast(m)} />
+        </div>
+      )}
+      <WaterCard date={date} weight={t.weight} />
 
       {dp ? (
         <>
@@ -138,6 +164,7 @@ export default function Nutrition() {
                 onItem={(it) => setItemSheet({ mealKey: m.key, uid: it.uid })}
                 onAdd={() => setAddTo(m.key)}
                 onRemoveMeal={() => removeMeal(dp, m.key)}
+                onSaveCombo={() => setComboMeal(m)}
                 onRemoveItem={(it) => {
                   removeItem(dp, m.key, it.uid);
                   showToast(`Đã xoá ${it.name}`);
@@ -169,6 +196,11 @@ export default function Nutrition() {
               Chia lại khẩu phần
             </Button>
           </div>
+          {isToday && yPlan?.meals?.some((m) => m.items.length) && (
+            <Button variant="ghost" className="w-full !min-h-11 text-[15px] mt-2" onClick={() => setCopyOpen(true)}>
+              Ăn giống hôm qua
+            </Button>
+          )}
           <p className="px-4 pt-2 text-[13px] text-muted">
             Chạm vào món để đổi khẩu phần, đổi món khác hoặc xoá. Chạm vòng tròn để đánh dấu bữa đã ăn. “Chia lại khẩu phần” tính lại các bữa chưa ăn theo phần mục tiêu còn
             thiếu.
@@ -242,7 +274,44 @@ export default function Nutrition() {
           await addFood(entry);
           setAddTo(null);
         }}
+        onAddMany={async (items, label) => {
+          await addMany(items, label);
+          setAddTo(null);
+        }}
+        today={today}
       />
+      <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title="Ăn giống hôm qua?">
+        {yPlan && (
+          <>
+            <p className="text-[15px] text-muted mb-3">Các bữa chưa ăn hôm nay sẽ thay bằng thực đơn ngày {fmtDate(yesterday)} (đúng món và khẩu phần). Bữa đã đánh dấu ăn giữ nguyên.</p>
+            <div className="rounded-[16px] bg-surface px-4 py-1 mb-4">
+              {yPlan.meals.filter((m) => m.items.length).map((m) => (
+                <div key={m.key} className="py-2 hairline-b last:shadow-none">
+                  <div className="flex justify-between text-[15px]">
+                    <b>
+                      {m.time} {m.name}
+                    </b>
+                    <span className="font-rounded tnum text-muted">{totalsKcal(mealTotals(m))} kcal</span>
+                  </div>
+                  <div className="text-[13px] text-muted">{m.items.map(itemLabel).join(' · ')}</div>
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={async () => {
+                await copyDayPlan(dp, yesterday);
+                setCopyOpen(false);
+                showToast('Đã chép thực đơn hôm qua');
+              }}
+            >
+              Dùng thực đơn hôm qua
+            </Button>
+          </>
+        )}
+      </Sheet>
+      <ComboSheet meal={comboMeal} onClose={() => setComboMeal(null)} onSaved={(n) => showToast(`Đã lưu combo “${n}”`)} />
       <LogSheet id={logSheet} onClose={() => setLogSheet(null)} />
       <PlanSheet open={planSheet} onClose={() => setPlanSheet(false)} dp={dp} targets={t} onPick={async (id) => {
         await switchDayPlan(dp, id, id === 'I' ? 'rest' : 'train', t);
@@ -258,7 +327,7 @@ export default function Nutrition() {
 }
 
 /* ---------- Một bữa trong thực đơn ---------- */
-function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveItem }) {
+function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveItem, onSaveCombo }) {
   const tot = mealTotals(meal);
   const k = totalsKcal(tot);
   const bg = meal.eaten ? 'color-mix(in srgb, var(--go) 9%, var(--surface))' : 'var(--surface)';
@@ -344,9 +413,13 @@ function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveI
         <button className="press flex items-center gap-1 min-h-11 px-2 text-[15px] font-medium text-accent" onClick={onAdd}>
           <IconPlus size={16} /> Thêm món
         </button>
-        {!meal.items.length && (
+        {!meal.items.length ? (
           <button className="ml-auto min-h-11 px-2 text-[15px] text-danger" onClick={onRemoveMeal}>
             Xoá bữa
+          </button>
+        ) : (
+          <button className="ml-auto min-h-11 px-2 text-[15px] text-muted" onClick={onSaveCombo}>
+            Lưu combo
           </button>
         )}
       </div>
@@ -451,8 +524,10 @@ function ItemSheet({ open, item, meal, onClose, onPortion, onReplace, onRemove }
 }
 
 /* ---------- Bảng thêm món: gõ để gợi ý, lọc nhóm, món của tôi, tự nhập ---------- */
-function AddFoodSheet({ open, onClose, title, onAdd }) {
+function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
   const presets = useLiveQuery(() => db.foodPresets.orderBy('name').toArray(), []) || [];
+  const combos = useLiveQuery(() => db.combos.orderBy('name').toArray(), []) || [];
+  const frequent = useLiveQuery(() => (open ? frequentItems(today) : []), [open, today]) || [];
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('all');
   const [n, setN] = useState(1);
@@ -474,8 +549,14 @@ function AddFoodSheet({ open, onClose, title, onAdd }) {
     const nq = normalize(q.trim());
     return presets.filter((p) => !nq || normalize(p.name).includes(nq));
   }, [q, presets]);
-  const pool = group === 'all' || group === 'mine' ? FOODS : FOODS.filter((f) => f.group === group);
-  const list = useMemo(() => (group === 'mine' ? [] : searchFoods(q, pool, 400)), [q, group]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pool = group === 'all' || group === 'mine' || group === 'combo' ? FOODS : FOODS.filter((f) => f.group === group);
+  const list = useMemo(() => (group === 'mine' || group === 'combo' ? [] : searchFoods(q, pool, 400)), [q, group]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nq = normalize(q.trim());
+  const combosShown = combos.filter((c) => !nq || normalize(c.name).includes(nq));
+  const home = group === 'all' && !q.trim();
+  // món hay ăn: tạo lại item mới (uid mới) theo khẩu phần đã ăn × khẩu phần đang chọn
+  const pickFrequent = (it) => onAdd(it.foodId && FOOD_BY_ID[it.foodId] ? itemFromFood(it.foodId, it.n * n) : itemCustom(it, it.n * n));
+  const pickCombo = (c) => onAddMany(c.items.map((it) => ({ ...it, n: it.n * n })), `combo ${c.name}`);
 
   const addFood = (f) => onAdd(itemFromFood(f.id, n));
   const addPreset = (p) => onAdd(itemCustom(p, n));
@@ -498,7 +579,7 @@ function AddFoodSheet({ open, onClose, title, onAdd }) {
         />
       </div>
       <div className="flex gap-1.5 overflow-x-auto mt-2.5 pb-1 -mx-4 px-4 [scrollbar-width:none]">
-        {[{ id: 'all', label: 'Tất cả' }, { id: 'mine', label: '★ Của tôi' }, ...FOOD_GROUPS].map((g) => (
+        {[{ id: 'all', label: 'Tất cả' }, { id: 'mine', label: '★ Của tôi' }, { id: 'combo', label: 'Combo' }, ...FOOD_GROUPS].map((g) => (
           <button
             key={g.id}
             onClick={() => {
@@ -530,6 +611,35 @@ function AddFoodSheet({ open, onClose, title, onAdd }) {
           if (save) db.foodPresets.add({ name: entry.name, protein: entry.protein, fat: entry.fat, carbs: entry.carbs });
           onAdd(itemCustom(entry, 1));
         }} />}
+        {home && frequent.length > 0 && (
+          <>
+            <ListHead>Hay ăn</ListHead>
+            {frequent.map((it) => (
+              <FoodPick key={`f${it.uid}`} name={`${itemLabel(it)} · ${it.count} lần`} p={it.protein * it.n * n} f={it.fat * it.n * n} c={it.carbs * it.n * n} onPick={() => pickFrequent(it)} />
+            ))}
+          </>
+        )}
+        {(home || group === 'combo' || (group === 'all' && q.trim())) && combosShown.length > 0 && (
+          <>
+            {group !== 'combo' && <ListHead>Combo của tôi</ListHead>}
+            {combosShown.map((c) => {
+              const tt = comboTotals(c);
+              return (
+                <FoodPick
+                  key={`c${c.id}`}
+                  name={`${c.name} · ${c.items.length} món`}
+                  p={tt.protein * n}
+                  f={tt.fat * n}
+                  c={tt.carbs * n}
+                  onPick={() => pickCombo(c)}
+                  onDelete={group === 'combo' ? () => db.combos.delete(c.id) : null}
+                />
+              );
+            })}
+          </>
+        )}
+        {group === 'combo' && combosShown.length === 0 && <p className="px-4 py-3 text-[15px] text-muted">Chưa có combo. Ở mỗi bữa trong thực đơn, chạm “Lưu combo” để lưu cả bữa thành 1 lần chạm.</p>}
+        {home && (frequent.length > 0 || combosShown.length > 0) && <ListHead>Tất cả món</ListHead>}
         {(group === 'mine' || (group === 'all' && q.trim())) &&
           mine.map((p) => (
             <FoodPick key={`p${p.id}`} name={`★ ${p.name}`} p={p.protein * n} f={p.fat * n} c={p.carbs * n} onPick={() => addPreset(p)} onDelete={group === 'mine' ? () => db.foodPresets.delete(p.id) : null} />
@@ -543,10 +653,14 @@ function AddFoodSheet({ open, onClose, title, onAdd }) {
             Xem thêm {list.length - limit} món
           </button>
         )}
-        {group !== 'mine' && list.length === 0 && mine.length === 0 && <p className="px-4 py-3 text-[15px] text-muted">Không tìm thấy. Chạm “Tự nhập” ở trên.</p>}
+        {group !== 'mine' && group !== 'combo' && list.length === 0 && mine.length === 0 && <p className="px-4 py-3 text-[15px] text-muted">Không tìm thấy. Chạm “Tự nhập” ở trên.</p>}
       </div>
     </Sheet>
   );
+}
+
+function ListHead({ children }) {
+  return <div className="px-4 pt-3 pb-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-muted hairline-b">{children}</div>;
 }
 
 function FoodPick({ name, p, f, c, q, onPick, onDelete }) {
@@ -713,6 +827,90 @@ function PlanSheet({ open, onClose, dp, targets, onPick }) {
           );
         })}
       </div>
+    </Sheet>
+  );
+}
+
+/* ---------- Nước uống ---------- */
+function WaterCard({ date, weight }) {
+  const entries = useLiveQuery(() => db.water.where('date').equals(date).toArray(), [date]) || [];
+  const trained = useLiveQuery(async () => (await db.workouts.where('date').equals(date).filter((w) => !!w.completedAt).count()) > 0, [date]);
+  const total = entries.reduce((a, e) => a + (+e.ml || 0), 0);
+  const goal = waterGoal(weight, trained);
+  const pct = Math.min(1, total / goal);
+  const done = total >= goal;
+  const add = async (ml) => {
+    haptic();
+    await addWater(date, ml);
+  };
+  return (
+    <Card className="mt-3">
+      <div className="flex items-center gap-3">
+        <span className="h-10 w-10 shrink-0 rounded-[12px] grid place-items-center text-white" style={{ background: done ? 'var(--go)' : '#32ade6' }}>
+          {done ? <IconCheck size={22} /> : <IconDrop size={22} />}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] text-muted">Nước uống</div>
+          <div className="font-rounded tnum leading-tight">
+            <span className="text-[22px] font-bold">{fmtL(total)}</span>
+            <span className="text-[13px] text-muted"> / {fmtL(goal)}</span>
+          </div>
+        </div>
+        <button className="press h-10 w-10 rounded-full bg-surface-2 text-[17px] text-muted disabled:opacity-40" disabled={!entries.length} onClick={() => undoWater(date)} aria-label="Bớt lần ghi nước cuối">
+          −
+        </button>
+        <button className="press h-10 px-3 rounded-full text-[15px] font-semibold text-white" style={{ background: '#32ade6' }} onClick={() => add(250)}>
+          +250
+        </button>
+        <button className="press h-10 px-3 rounded-full text-[15px] font-semibold text-white" style={{ background: '#32ade6' }} onClick={() => add(500)}>
+          +500
+        </button>
+      </div>
+      <div className="mt-3 h-2 rounded-full overflow-hidden" style={{ background: 'color-mix(in srgb, #32ade6 18%, transparent)' }}>
+        <motion.div className="h-full rounded-full" style={{ background: done ? 'var(--go)' : '#32ade6' }} initial={false} animate={{ width: `${pct * 100}%` }} transition={{ type: 'spring', damping: 26, stiffness: 220 }} />
+      </div>
+      <p className="text-[12px] text-muted mt-1.5">
+        35 ml × {fmtNum(weight)} kg{trained ? ' + 500 ml ngày tập' : ''}. Cà phê, trà, canh cũng tính. Nước tiểu vàng nhạt là đủ.
+      </p>
+    </Card>
+  );
+}
+
+/* ---------- Lưu một bữa thành combo ---------- */
+function ComboSheet({ meal, onClose, onSaved }) {
+  const [name, setName] = useState('');
+  useEffect(() => {
+    if (meal) setName(meal.items.length === 1 ? meal.items[0].name : meal.items.slice(0, 2).map((i) => i.name.replace(/\s*\(.*?\)/g, '')).join(' + '));
+  }, [meal]);
+  if (!meal) return <Sheet open={false} onClose={onClose} />;
+  const tt = mealTotals(meal);
+  return (
+    <Sheet open={!!meal} onClose={onClose} title="Lưu combo">
+      <p className="text-[15px] text-muted mb-3">Lưu cả bữa thành một combo để lần sau ghi bằng 1 lần chạm (trong “Thêm món”). Hợp với bữa hay ăn ở quán quen.</p>
+      <TextField value={name} onChange={(e) => setName(e.target.value)} placeholder="Tên combo, vd: Cơm gà quán cô Ba" />
+      <div className="rounded-[16px] bg-surface px-4 py-1 mt-3">
+        {meal.items.map((it) => (
+          <div key={it.uid} className="flex justify-between py-2 hairline-b last:shadow-none text-[15px]">
+            <span className="truncate pr-3">{itemLabel(it)}</span>
+            <span className="font-rounded tnum text-muted">{itemKcal(it)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[13px] text-muted mt-2 font-rounded tnum">
+        Tổng {totalsKcal(tt)} kcal · P {Math.round(tt.protein)} · F {fmtNum(tt.fat)} · C {Math.round(tt.carbs)}
+      </p>
+      <Button
+        variant="primary"
+        className="w-full mt-4"
+        disabled={!name.trim()}
+        onClick={async () => {
+          await saveCombo(name, meal.items);
+          onSaved(name.trim());
+          onClose();
+        }}
+      >
+        Lưu combo
+      </Button>
     </Sheet>
   );
 }
