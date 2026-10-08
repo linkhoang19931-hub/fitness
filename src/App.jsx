@@ -8,6 +8,7 @@ import Body from './screens/Body';
 import Settings from './screens/Settings';
 import Sleep from './screens/Sleep';
 import RestTimer from './components/RestTimer';
+import BackupNudge from './components/BackupNudge';
 import { IconDumbbell, IconFork, IconGear, IconMoon, IconScale } from './components/Icons';
 
 const TABS = [
@@ -86,6 +87,7 @@ export default function App() {
             <div className="text-[13px] font-semibold uppercase tracking-[0.02em] text-muted">{dateLine}</div>
             <h1 className="text-[34px] leading-[1.15] font-bold tracking-[-0.03em]">{current.title}</h1>
           </header>
+          {current.id !== 'settings' && current.id !== 'workout' && <BackupNudge />}
           <Screen />
         </motion.div>
       </main>

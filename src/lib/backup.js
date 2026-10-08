@@ -1,5 +1,6 @@
 import { db, TABLES } from './db';
 import { movingAverage7, todayStr } from './utils';
+import { useSettings } from './store';
 
 // ---------- Tiện ích file ----------
 const blobToDataURL = (blob) =>
@@ -23,9 +24,9 @@ export async function saveFile(blob, filename) {
   if (isTouch && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: filename });
-      return;
+      return true;
     } catch (e) {
-      if (e?.name === 'AbortError') return;
+      if (e?.name === 'AbortError') return false;
     }
   }
   const url = URL.createObjectURL(blob);
@@ -36,6 +37,7 @@ export async function saveFile(blob, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return true;
 }
 
 // ---------- Sao lưu JSON toàn phần ----------
@@ -57,7 +59,9 @@ export async function exportJSON(settings) {
   }
   const payload = { app: 'baki-goal', schemaVersion: 1, exportedAt: new Date().toISOString(), settings, tables };
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-  await saveFile(blob, `baki-goal-backup-${todayStr()}.json`);
+  const ok = await saveFile(blob, `baki-goal-backup-${todayStr()}.json`);
+  if (ok) useSettings.getState().update({ lastBackupAt: Date.now(), backupSnooze: null });
+  return ok;
 }
 
 export async function readBackupFile(file) {

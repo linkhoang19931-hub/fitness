@@ -376,7 +376,15 @@ function BackupCard({ showToast }) {
     <>
       <GroupLabel>Sao lưu & dữ liệu</GroupLabel>
       <Card className="!py-0">
-        <RowBtn onClick={() => run(() => exportJSON(pickSettings(settings)))}>Sao lưu toàn bộ (.json)</RowBtn>
+        <div className="py-3 hairline-b">
+          <div className="text-[13px] text-muted">Lần sao lưu gần nhất</div>
+          <div className="text-[17px] font-semibold" style={{ color: !settings.lastBackupAt || Date.now() - settings.lastBackupAt > 7 * 86400000 ? 'var(--warn)' : 'var(--go)' }}>
+            {settings.lastBackupAt
+              ? `${new Date(settings.lastBackupAt).toLocaleDateString('vi-VN')} · ${Math.floor((Date.now() - settings.lastBackupAt) / 86400000)} ngày trước`
+              : 'Chưa sao lưu lần nào'}
+          </div>
+        </div>
+        <RowBtn onClick={() => run(async () => { if (await exportJSON(pickSettings(settings))) showToast('Đã sao lưu'); })}>Sao lưu toàn bộ (.json)</RowBtn>
         <RowBtn onClick={() => fileRef.current.click()}>Khôi phục từ file .json</RowBtn>
         <RowBtn onClick={() => run(exportWorkoutCSV)}>Xuất CSV lịch sử tập</RowBtn>
         <RowBtn onClick={() => run(exportWeightCSV)}>Xuất CSV cân nặng</RowBtn>
@@ -384,7 +392,7 @@ function BackupCard({ showToast }) {
         <RowBtn onClick={() => run(exportSleepCSV)}>Xuất CSV giấc ngủ</RowBtn>
       </Card>
       <p className="px-4 pt-2 text-[13px] text-muted">
-        Dữ liệu chỉ nằm trên máy này. Xuất file .json mỗi tuần và cất vào Tệp hoặc Drive để không mất khi đổi máy.
+        Dữ liệu chỉ nằm trong app trên máy này. <b className="text-ink">Xoá app khỏi màn hình chính là xoá luôn toàn bộ dữ liệu.</b> Sao lưu mỗi tuần, chọn “Lưu vào Tệp” → iCloud Drive; khi cài lại chỉ cần “Khôi phục từ file .json”.
       </p>
       <Card className="!py-0 mt-4">
         <RowBtn danger onClick={() => setResetStep(1)}>

@@ -31,7 +31,9 @@ export const DEFAULT_SETTINGS = {
   deloadSnooze: null, // 'YYYY-MM-DD' hoãn nhắc giảm tải tới ngày này
   sleepCycleMin: 90, // độ dài 1 chu kỳ ngủ (phút)
   sleepLatencyMin: 15, // thời gian từ lúc lên giường tới khi ngủ được (phút)
-  adaptiveSnooze: null, // 'YYYY-MM-DD' ẩn gợi ý chỉnh calo ở tab Dinh dưỡng tới ngày này
+  adaptiveSnooze: null,
+  lastBackupAt: null, // ms — lần xuất file sao lưu gần nhất
+  backupSnooze: null, // 'YYYY-MM-DD' ẩn nhắc sao lưu tới ngày này // 'YYYY-MM-DD' ẩn gợi ý chỉnh calo ở tab Dinh dưỡng tới ngày này
 };
 
 // Cấu hình người dùng — lưu LocalStorage qua Zustand persist (URD 2.1)
