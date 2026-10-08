@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS = {
   tdeeOverride: null, // { kcal, at: 'YYYY-MM-DD' } — TDEE đo từ cân nặng + ăn uống thực tế (đã duyệt)
   deloadStart: null, // 'YYYY-MM-DD' ngày bắt đầu tuần giảm tải gần nhất
   deloadSnooze: null, // 'YYYY-MM-DD' hoãn nhắc giảm tải tới ngày này
+  sleepCycleMin: 90, // độ dài 1 chu kỳ ngủ (phút)
+  sleepLatencyMin: 15, // thời gian từ lúc lên giường tới khi ngủ được (phút)
   adaptiveSnooze: null, // 'YYYY-MM-DD' ẩn gợi ý chỉnh calo ở tab Dinh dưỡng tới ngày này
 };
 

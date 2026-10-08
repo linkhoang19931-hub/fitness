@@ -75,6 +75,12 @@ Tab **Giấc ngủ**: bấm **Đi ngủ** khi lên giường, sáng bấm **Đã
 - **Ghi món nhanh**: “Ăn giống hôm qua”, mục “Hay ăn” (30 ngày), combo lưu từ một bữa.
 - **Nước uống**: 35 ml/kg + 500 ml ngày tập; +250 / +500 / bớt lần cuối.
 
+## Chỉnh nhanh món & chu kỳ ngủ
+
+- Mỗi món trong thực đơn có nút −/+ ngay cạnh (bước 0,5 phần); dưới 0,5 phần nút − thành thùng rác để xoá món. Món ngoài thực đơn: + thêm 1 phần, thùng rác để xoá.
+- Bảng “Thêm món” không đóng sau mỗi lần thêm: mỗi món hiện bộ đếm −/số/+, nút − gỡ đúng lần vừa thêm; “Xong · đã thêm N món” để đóng.
+- Chu kỳ ngủ (mặc định 90 phút, ngủ thiếp 15 phút; chỉnh được 70–120 / 0–45 phút): gợi ý giờ lên giường theo số chu kỳ, giờ dậy hợp chu kỳ nếu ngủ ngay, báo thức hợp chu kỳ khi đang ngủ, và số chu kỳ + dậy cuối/giữa chu kỳ ở thẻ đêm qua.
+
 ## Hiệu ứng & cảm giác dùng
 
 Dùng thư viện Motion: chuyển tab trượt nhẹ, bảng kéo lên có lò xo (vuốt thanh trên xuống để đóng), vuốt sang trái để xoá (món ăn, món ngoài thực đơn, số đo cân), số chạy khi thay đổi, tick set có hiệu ứng nảy, thẻ bài/set thêm bớt có chuyển động, đồng hồ nghỉ trượt lên, màn chúc mừng có pháo giấy và kỷ lục mới khi lưu buổi tập. Rung nhẹ khi chạm (iPhone iOS 18+ qua công tắc hệ thống). Tự tắt hiệu ứng khi máy bật "Giảm chuyển động".

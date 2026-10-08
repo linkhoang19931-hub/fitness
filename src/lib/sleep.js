@@ -286,3 +286,36 @@ export function rangeOf(period, today) {
   const y = today.slice(0, 4);
   return { from: `${y}-01-01`, to: `${y}-12-31` };
 }
+
+// ---------- Chu kỳ ngủ ----------
+// Một chu kỳ (N1 → N2 → N3 → REM) kéo dài trung bình ~90 phút (thường 70–120 phút, khác nhau giữa người và giữa đầu/cuối đêm).
+// Dậy lúc vừa hết một chu kỳ (đang ngủ nông/REM) thường đỡ uể oải hơn dậy giữa giấc sâu N3.
+// Thời gian từ lúc lên giường tới khi ngủ được ~10–20 phút.
+export const CYCLE_DEFAULT = 90;
+export const LATENCY_DEFAULT = 15;
+export const cycleOf = (s) => ({
+  len: Math.min(120, Math.max(70, +s?.sleepCycleMin || CYCLE_DEFAULT)),
+  latency: Math.min(45, Math.max(0, s?.sleepLatencyMin ?? LATENCY_DEFAULT)),
+});
+
+// Số chu kỳ đã ngủ: trừ thời gian ngủ thiếp đi
+export function cyclesOf(hours, { len, latency }) {
+  const min = Math.max(0, hours * 60 - latency);
+  const n = min / len;
+  const rest = min - Math.floor(n) * len; // phút dư sau chu kỳ trọn cuối
+  const atEnd = rest <= 20 || len - rest <= 15; // dậy gần cuối/đầu chu kỳ
+  return { n, full: Math.floor(n), rest: Math.round(rest), atEnd };
+}
+
+// Giờ nên lên giường để dậy đúng `wakeMin` sau n chu kỳ (phút trong ngày, có thể âm = tối hôm trước)
+export const bedForCycles = (wakeMin, n, c) => wakeMin - n * c.len - c.latency;
+// Giờ dậy hợp chu kỳ nếu lên giường lúc startTs
+export const wakeForCycles = (startTs, n, c) => startTs + (c.latency + n * c.len) * MIN;
+
+// Số chu kỳ gần mục tiêu giờ ngủ nhất (ưu tiên không thấp hơn mức tối thiểu)
+export function bestCycles(target, c) {
+  const want = (target.target * 60 - 0) / c.len;
+  let n = Math.round(want);
+  if ((n * c.len) / 60 < target.min) n++;
+  return Math.max(3, n);
+}

@@ -35,6 +35,8 @@ import {
   copyDayPlan,
   frequentItems,
   saveCombo,
+  halfStep,
+  newUid,
 } from '../lib/dayplan';
 import AdaptiveCard from '../components/Adaptive';
 import { addWater, fmtL, undoWater, waterGoal } from '../lib/water';
@@ -89,23 +91,42 @@ export default function Nutrition() {
   const nextKey = isToday && dp ? (dp.meals.find((m) => !m.eaten && toMin(m.time) >= nowMin - 90) || dp.meals.find((m) => !m.eaten))?.key : null;
   const planned = dp ? dp.meals.reduce((a, m) => a + totalsKcal(mealTotals(m)), 0) : 0;
 
+  // Thêm món; trả về "dấu vết" để nút − trong bảng thêm món gỡ lại đúng món vừa thêm
   const addFood = async (entry) => {
     if (addTo === 'extra' || !dp) {
       const m = itemMacros(entry);
-      await db.nutritionLogs.add({ date, mealName: itemLabel(entry), ...m, calories: itemKcal(entry), createdAt: Date.now() });
-    } else {
-      await addItem(dp, addTo, entry);
+      const id = await db.nutritionLogs.add({ date, mealName: itemLabel(entry), ...m, calories: itemKcal(entry), createdAt: Date.now() });
+      showToast(`Đã thêm ${entry.name}`);
+      return [{ log: id }];
     }
+    const it = { ...entry, uid: entry.uid || newUid() };
+    await addItem(dp, addTo, it);
     showToast(`Đã thêm ${entry.name}`);
+    return [{ meal: addTo, uid: it.uid }];
   };
   const addMany = async (items, label) => {
+    let handles;
     if (addTo === 'extra' || !dp) {
       const now = Date.now();
-      await db.nutritionLogs.bulkAdd(items.map((it, i) => ({ date, mealName: itemLabel(it), ...itemMacros(it), calories: itemKcal(it), createdAt: now + i })));
+      const ids = await db.nutritionLogs.bulkAdd(items.map((it, i) => ({ date, mealName: itemLabel(it), ...itemMacros(it), calories: itemKcal(it), createdAt: now + i })), { allKeys: true });
+      handles = ids.map((id) => ({ log: id }));
     } else {
-      await addItems(dp, addTo, items);
+      const withUid = items.map((it) => ({ ...it, uid: newUid() }));
+      await addItems(dp, addTo, withUid);
+      handles = withUid.map((it) => ({ meal: addTo, uid: it.uid }));
     }
     showToast(`Đã thêm ${label}`);
+    return handles;
+  };
+  const undoAdd = async (handles) => {
+    for (const h of handles) {
+      if (h.log) await db.nutritionLogs.delete(h.log);
+      else {
+        const cur = await db.dayPlans.get(date);
+        if (cur) await removeItem(cur, h.meal, h.uid);
+      }
+    }
+    showToast('Đã bớt');
   };
 
   const sheetMeal = itemSheet && dp?.meals.find((m) => m.key === itemSheet.mealKey);
@@ -165,7 +186,12 @@ export default function Nutrition() {
                 onAdd={() => setAddTo(m.key)}
                 onRemoveMeal={() => removeMeal(dp, m.key)}
                 onSaveCombo={() => setComboMeal(m)}
+                onPortion={(it, n) => {
+                  haptic();
+                  updateItem(dp, m.key, it.uid, { n });
+                }}
                 onRemoveItem={(it) => {
+                  haptic();
                   removeItem(dp, m.key, it.uid);
                   showToast(`Đã xoá ${it.name}`);
                 }}
@@ -227,14 +253,30 @@ export default function Nutrition() {
         ) : (
           extras.map((l) => (
             <SwipeRow key={l.id} className="-mx-4 hairline-b last:shadow-none" onDelete={() => db.nutritionLogs.delete(l.id)}>
-            <button className="w-full flex items-center gap-3 py-2.5 px-4 text-left" onClick={() => setLogSheet(l.id)}>
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 py-2 pl-4 pr-3">
+              <button className="flex-1 min-w-0 text-left" onClick={() => setLogSheet(l.id)}>
                 <div className="text-[16px] truncate">{l.mealName}</div>
-                <MacroLine p={l.protein} f={l.fat} c={l.carbs} />
-              </div>
-              <span className="text-[15px] font-semibold font-rounded tnum">{l.calories}</span>
-              <IconChevron size={14} className="text-faint" />
-            </button>
+                <span className="flex items-center gap-2">
+                  <MacroLine p={l.protein} f={l.fat} c={l.carbs} />
+                  <span className="text-[13px] font-semibold font-rounded tnum">{l.calories} kcal</span>
+                </span>
+              </button>
+              <QtyStepper
+                name={l.mealName}
+                trash
+                onMinus={() => {
+                  haptic();
+                  db.nutritionLogs.delete(l.id);
+                  showToast(`Đã xoá ${l.mealName}`);
+                }}
+                onPlus={async () => {
+                  haptic();
+                  const { id, ...rest } = l;
+                  await db.nutritionLogs.add({ ...rest, createdAt: Date.now() });
+                  showToast(`Thêm 1 phần ${l.mealName}`);
+                }}
+              />
+            </div>
             </SwipeRow>
           ))
         )}
@@ -270,14 +312,9 @@ export default function Nutrition() {
         open={!!addTo}
         onClose={() => setAddTo(null)}
         title={addTo === 'extra' || !dp ? 'Ghi món ăn' : `Thêm vào ${dp.meals.find((m) => m.key === addTo)?.name.toLowerCase() || 'bữa'}`}
-        onAdd={async (entry) => {
-          await addFood(entry);
-          setAddTo(null);
-        }}
-        onAddMany={async (items, label) => {
-          await addMany(items, label);
-          setAddTo(null);
-        }}
+        onAdd={addFood}
+        onAddMany={addMany}
+        onUndo={undoAdd}
         today={today}
       />
       <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title="Ăn giống hôm qua?">
@@ -327,7 +364,7 @@ export default function Nutrition() {
 }
 
 /* ---------- Một bữa trong thực đơn ---------- */
-function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveItem, onSaveCombo }) {
+function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveItem, onSaveCombo, onPortion }) {
   const tot = mealTotals(meal);
   const k = totalsKcal(tot);
   const bg = meal.eaten ? 'color-mix(in srgb, var(--go) 9%, var(--surface))' : 'var(--surface)';
@@ -392,17 +429,25 @@ function MealCard({ meal, next, onToggle, onItem, onAdd, onRemoveMeal, onRemoveI
               className="overflow-hidden"
             >
               <SwipeRow bg={bg} onDelete={() => onRemoveItem(it)}>
-              <button className="w-full flex items-center gap-3 py-2.5 px-4 text-left hairline-t" onClick={() => onItem(it)}>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[16px] leading-snug">
-                    {it.name}
-                    {it.n !== 1 && <span className="ml-1.5 inline-block rounded-full bg-surface-2 px-1.5 text-[12px] font-semibold font-rounded align-middle">×{fmtN(it.n)}</span>}
+              <div className="flex items-center gap-2 py-2 pl-4 pr-3 hairline-t">
+                <button className="flex-1 min-w-0 text-left" onClick={() => onItem(it)}>
+                  <span className="block text-[16px] leading-snug">{it.name}</span>
+                  <span className="flex items-center gap-2">
+                    <MacroLine p={m.protein} f={m.fat} c={m.carbs} />
+                    <span className="text-[13px] font-semibold font-rounded tnum text-ink">{itemKcal(it)} kcal</span>
                   </span>
-                  <MacroLine p={m.protein} f={m.fat} c={m.carbs} />
-                </span>
-                <span className="text-[15px] font-semibold font-rounded tnum">{itemKcal(it)}</span>
-                <IconChevron size={14} className="text-faint" />
-              </button>
+                </button>
+                <QtyStepper
+                  n={it.n}
+                  name={it.name}
+                  onMinus={() => {
+                    const v = halfStep(it.n, -1);
+                    if (v == null) onRemoveItem(it);
+                    else onPortion(it, v);
+                  }}
+                  onPlus={() => onPortion(it, halfStep(it.n, 1))}
+                />
+              </div>
               </SwipeRow>
             </motion.li>
           );
@@ -524,7 +569,23 @@ function ItemSheet({ open, item, meal, onClose, onPortion, onReplace, onRemove }
 }
 
 /* ---------- Bảng thêm món: gõ để gợi ý, lọc nhóm, món của tôi, tự nhập ---------- */
-function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
+function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, onUndo, today }) {
+  // món đã thêm trong lần mở bảng này: key → [handles của từng lần bấm +]
+  const [added, setAdded] = useState({});
+  const push = async (key, p) => {
+    haptic();
+    const h = await p;
+    if (h) setAdded((a) => ({ ...a, [key]: [...(a[key] || []), h] }));
+  };
+  const pop = async (key) => {
+    haptic();
+    const stack = added[key] || [];
+    if (!stack.length) return;
+    setAdded((a) => ({ ...a, [key]: stack.slice(0, -1) }));
+    await onUndo(stack[stack.length - 1]);
+  };
+  const count = (key) => added[key]?.length || 0;
+  const totalAdded = Object.values(added).reduce((x, v) => x + v.length, 0);
   const presets = useLiveQuery(() => db.foodPresets.orderBy('name').toArray(), []) || [];
   const combos = useLiveQuery(() => db.combos.orderBy('name').toArray(), []) || [];
   const frequent = useLiveQuery(() => (open ? frequentItems(today) : []), [open, today]) || [];
@@ -541,6 +602,7 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
       setCustom(false);
       setGroup('all');
       setLimit(30);
+      setAdded({});
       setTimeout(() => inputRef.current?.focus(), 250);
     }
   }, [open]);
@@ -555,11 +617,12 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
   const combosShown = combos.filter((c) => !nq || normalize(c.name).includes(nq));
   const home = group === 'all' && !q.trim();
   // món hay ăn: tạo lại item mới (uid mới) theo khẩu phần đã ăn × khẩu phần đang chọn
-  const pickFrequent = (it) => onAdd(it.foodId && FOOD_BY_ID[it.foodId] ? itemFromFood(it.foodId, it.n * n) : itemCustom(it, it.n * n));
-  const pickCombo = (c) => onAddMany(c.items.map((it) => ({ ...it, n: it.n * n })), `combo ${c.name}`);
+  const pickFrequent = (it) => push(`h:${it.foodId || it.name}:${n}`, onAdd(it.foodId && FOOD_BY_ID[it.foodId] ? itemFromFood(it.foodId, it.n * n) : itemCustom(it, it.n * n)));
+  const pickCombo = (c) => push(`c:${c.id}:${n}`, onAddMany(c.items.map((it) => ({ ...it, n: it.n * n })), `combo ${c.name}`));
 
-  const addFood = (f) => onAdd(itemFromFood(f.id, n));
-  const addPreset = (p) => onAdd(itemCustom(p, n));
+  const addFood = (f) => push(`f:${f.id}:${n}`, onAdd(itemFromFood(f.id, n)));
+  const addPreset = (p) => push(`p:${p.id}:${n}`, onAdd(itemCustom(p, n)));
+  const pick = (key) => ({ count: count(key), onRemove: () => pop(key) });
 
   return (
     <Sheet open={open} onClose={onClose} title={title}>
@@ -609,13 +672,14 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
         </button>
         {custom && <CustomForm initialName={q.trim()} onAdd={(entry, save) => {
           if (save) db.foodPresets.add({ name: entry.name, protein: entry.protein, fat: entry.fat, carbs: entry.carbs });
-          onAdd(itemCustom(entry, 1));
+          push(`x:${entry.name}`, onAdd(itemCustom(entry, 1)));
+          setCustom(false);
         }} />}
         {home && frequent.length > 0 && (
           <>
             <ListHead>Hay ăn</ListHead>
             {frequent.map((it) => (
-              <FoodPick key={`f${it.uid}`} name={`${itemLabel(it)} · ${it.count} lần`} p={it.protein * it.n * n} f={it.fat * it.n * n} c={it.carbs * it.n * n} onPick={() => pickFrequent(it)} />
+              <FoodPick key={`f${it.uid}`} name={`${itemLabel(it)} · ${it.count} lần`} p={it.protein * it.n * n} f={it.fat * it.n * n} c={it.carbs * it.n * n} onPick={() => pickFrequent(it)} {...pick(`h:${it.foodId || it.name}:${n}`)} />
             ))}
           </>
         )}
@@ -633,6 +697,7 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
                   c={tt.carbs * n}
                   onPick={() => pickCombo(c)}
                   onDelete={group === 'combo' ? () => db.combos.delete(c.id) : null}
+                  {...pick(`c:${c.id}:${n}`)}
                 />
               );
             })}
@@ -642,11 +707,11 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
         {home && (frequent.length > 0 || combosShown.length > 0) && <ListHead>Tất cả món</ListHead>}
         {(group === 'mine' || (group === 'all' && q.trim())) &&
           mine.map((p) => (
-            <FoodPick key={`p${p.id}`} name={`★ ${p.name}`} p={p.protein * n} f={p.fat * n} c={p.carbs * n} onPick={() => addPreset(p)} onDelete={group === 'mine' ? () => db.foodPresets.delete(p.id) : null} />
+            <FoodPick key={`p${p.id}`} name={`★ ${p.name}`} p={p.protein * n} f={p.fat * n} c={p.carbs * n} onPick={() => addPreset(p)} onDelete={group === 'mine' ? () => db.foodPresets.delete(p.id) : null} {...pick(`p:${p.id}:${n}`)} />
           ))}
         {group === 'mine' && mine.length === 0 && <p className="px-4 py-3 text-[15px] text-muted">Chưa có món nào. Khi tự nhập, bật “Lưu vào Của tôi”.</p>}
         {list.slice(0, limit).map((f) => (
-          <FoodPick key={f.id} name={f.name} p={f.protein * n} f={f.fat * n} c={f.carbs * n} q={q} onPick={() => addFood(f)} />
+          <FoodPick key={f.id} name={f.name} p={f.protein * n} f={f.fat * n} c={f.carbs * n} q={q} onPick={() => addFood(f)} {...pick(`f:${f.id}:${n}`)} />
         ))}
         {list.length > limit && (
           <button className="w-full py-3 text-accent text-[15px] font-medium" onClick={() => setLimit(limit + 40)}>
@@ -655,7 +720,36 @@ function AddFoodSheet({ open, onClose, title, onAdd, onAddMany, today }) {
         )}
         {group !== 'mine' && group !== 'combo' && list.length === 0 && mine.length === 0 && <p className="px-4 py-3 text-[15px] text-muted">Không tìm thấy. Chạm “Tự nhập” ở trên.</p>}
       </div>
+      {totalAdded > 0 && (
+        <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 bg-bg">
+          <Button variant="primary" className="w-full" onClick={onClose}>
+            Xong · đã thêm {totalAdded} món
+          </Button>
+        </div>
+      )}
     </Sheet>
+  );
+}
+
+/* ---------- Nút −/+ ngay cạnh món ---------- */
+function QtyStepper({ n, name, onMinus, onPlus, trash }) {
+  const willRemove = trash || (n != null && halfStep(n, -1) == null);
+  return (
+    <div className="flex items-center shrink-0 rounded-full bg-surface-2">
+      <motion.button
+        whileTap={{ scale: 0.85 }}
+        onClick={onMinus}
+        className="h-10 w-10 grid place-items-center rounded-full"
+        style={{ color: willRemove ? 'var(--danger)' : 'var(--accent)' }}
+        aria-label={willRemove ? `Xoá ${name}` : `Bớt ${name}`}
+      >
+        {willRemove ? <IconTrash size={18} /> : <span className="text-[22px] leading-none font-semibold">−</span>}
+      </motion.button>
+      {n != null && <span className="min-w-[34px] text-center text-[14px] font-semibold font-rounded tnum">×{fmtN(n)}</span>}
+      <motion.button whileTap={{ scale: 0.85 }} onClick={onPlus} className="h-10 w-10 grid place-items-center rounded-full text-accent" aria-label={`Thêm ${name}`}>
+        <IconPlus size={18} />
+      </motion.button>
+    </div>
   );
 }
 
@@ -663,11 +757,11 @@ function ListHead({ children }) {
   return <div className="px-4 pt-3 pb-1 text-[12px] font-semibold uppercase tracking-[0.03em] text-muted hairline-b">{children}</div>;
 }
 
-function FoodPick({ name, p, f, c, q, onPick, onDelete }) {
+function FoodPick({ name, p, f, c, q, onPick, onDelete, count = 0, onRemove }) {
   const r = (v) => Math.round(v * 10) / 10;
   return (
-    <div className="flex items-center hairline-b last:shadow-none">
-      <button className="flex-1 min-w-0 flex items-center gap-3 px-4 py-2.5 text-left" onClick={onPick}>
+    <div className="flex items-center hairline-b last:shadow-none" style={count ? { background: 'color-mix(in srgb, var(--accent) 8%, transparent)' } : undefined}>
+      <button className="flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 py-2.5 text-left" onClick={onPick}>
         <span className="flex-1 min-w-0">
           <Hl text={name} q={q} />
           <MacroLine p={r(p)} f={r(f)} c={r(c)} />
@@ -676,12 +770,24 @@ function FoodPick({ name, p, f, c, q, onPick, onDelete }) {
           <span className="block text-[16px] font-semibold font-rounded tnum">{kcalOf(p, f, c)}</span>
           <span className="block text-[11px] text-muted -mt-0.5">kcal</span>
         </span>
-        <span className="h-7 w-7 shrink-0 rounded-full grid place-items-center text-white" style={{ background: 'var(--accent)' }}>
-          <IconPlus size={15} />
-        </span>
       </button>
+      {count > 0 ? (
+        <div className="flex items-center shrink-0 mr-2 rounded-full" style={{ background: 'var(--accent)' }}>
+          <motion.button whileTap={{ scale: 0.85 }} className="h-9 w-9 grid place-items-center text-white text-[20px] font-semibold leading-none" onClick={onRemove} aria-label={`Bớt ${name}`}>
+            −
+          </motion.button>
+          <span className="min-w-[18px] text-center text-white text-[14px] font-bold font-rounded tnum">{count}</span>
+          <motion.button whileTap={{ scale: 0.85 }} className="h-9 w-9 grid place-items-center text-white" onClick={onPick} aria-label={`Thêm ${name}`}>
+            <IconPlus size={16} />
+          </motion.button>
+        </div>
+      ) : (
+        <motion.button whileTap={{ scale: 0.85 }} className="h-9 w-9 mr-2 shrink-0 rounded-full grid place-items-center text-white" style={{ background: 'var(--accent)' }} onClick={onPick} aria-label={`Thêm ${name}`}>
+          <IconPlus size={16} />
+        </motion.button>
+      )}
       {onDelete && (
-        <button className="h-11 w-11 grid place-items-center text-faint" onClick={onDelete} aria-label="Xoá khỏi Của tôi">
+        <button className="h-11 w-11 grid place-items-center text-faint" onClick={onDelete} aria-label="Xoá khỏi danh sách">
           <IconTrash size={18} />
         </button>
       )}

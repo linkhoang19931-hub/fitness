@@ -185,7 +185,15 @@ export function alternatives(item, list) {
 
 // ---- Ghi nhanh ----
 // Thêm nhiều món một lần (combo)
-export const addItems = (dp, mealKey, items) => saveMeal(dp, mealKey, (m) => ({ ...m, items: [...m.items, ...items.map((it) => ({ ...it, uid: uid() }))] }));
+export const addItems = (dp, mealKey, items) => saveMeal(dp, mealKey, (m) => ({ ...m, items: [...m.items, ...items.map((it) => ({ ...it, uid: it.uid || uid() }))] }));
+export const newUid = () => uid();
+
+// Nút −/+ cạnh món: bước 0,5 phần; dưới 0,5 → null (xoá món)
+export function halfStep(n, dir) {
+  if (dir > 0) return Math.min(5, Math.floor(n * 2 + 1e-6) / 2 + 0.5);
+  const v = Math.ceil(n * 2 - 1e-6) / 2 - 0.5;
+  return v < 0.5 ? null : v;
+}
 
 // "Ăn giống hôm qua": bữa đã ăn hôm nay giữ nguyên, các bữa chưa ăn thay bằng thực đơn của ngày nguồn
 export async function copyDayPlan(dp, fromDate) {

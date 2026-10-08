@@ -23,6 +23,11 @@ import {
   startSleep,
   suggestedBedtime,
   wakeMinute,
+  bedForCycles,
+  bestCycles,
+  cycleOf,
+  cyclesOf,
+  wakeForCycles,
 } from '../lib/sleep';
 import { AnimatedNumber, Button, Card, GroupLabel, Rings, Segmented, Sheet, SwipeRow, TextField, haptic, useToast } from '../components/ui';
 import { IconChevron, IconMoon, IconSunrise } from '../components/Icons';
@@ -60,6 +65,9 @@ export default function Sleep() {
   const recentWake = nights.slice(-14).filter((n) => n.wake).map((n) => wakeMinute(n.wake));
   const typicalWake = recentWake.length >= 3 ? [...recentWake].sort((a, b) => a - b)[Math.floor(recentWake.length / 2)] : 5 * 60 + 30;
   const bedBy = suggestedBedtime(typicalWake, target);
+  const cyc = cycleOf(settings);
+  const best = bestCycles(target, cyc);
+  const [cycleOpen, setCycleOpen] = useState(false);
 
   const goSleep = async () => {
     haptic();
@@ -80,7 +88,7 @@ export default function Sleep() {
   return (
     <div>
       {active === undefined ? null : active ? (
-        <SleepingCard active={active} onWake={wakeUp} onEdit={() => setEdit(active)} onCancel={() => db.sleeps.delete(active.id)} />
+        <SleepingCard active={active} cyc={cyc} best={best} onWake={wakeUp} onEdit={() => setEdit(active)} onCancel={() => db.sleeps.delete(active.id)} />
       ) : (
         <Card className="!p-0 overflow-hidden">
           <div className="p-5 text-white" style={{ background: NIGHT }}>
@@ -92,6 +100,7 @@ export default function Sleep() {
               để ngủ đủ {fmtHours(target.target)} nếu dậy lúc {fmtClockMin(typicalWake)}
               {recentWake.length < 3 ? ' (giờ tập 6:00)' : ' (giờ dậy thường ngày)'}. Muộn nhất {fmtClockMin(typicalWake - target.min * 60 - 15)} để đủ tối thiểu {target.min} giờ.
             </div>
+            <CyclePlan wake={typicalWake} cyc={cyc} best={best} target={target} onEdit={() => setCycleOpen(true)} />
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={goSleep}
@@ -106,7 +115,7 @@ export default function Sleep() {
         </Card>
       )}
 
-      {last && lastEval && <NightCard night={last} ev={lastEval} target={target} ctx={ctx} today={today} />}
+      {last && lastEval && <NightCard night={last} ev={lastEval} target={target} ctx={ctx} today={today} cyc={cyc} />}
 
       <Dashboard nights={nights} target={target} today={today} />
 
@@ -117,15 +126,16 @@ export default function Sleep() {
         {target.reasons.length ? ` vì ${target.reasons.join(' và ')}` : ''}.{!settings.age && ' Nhập tuổi trong Cài đặt để tính chính xác hơn.'}
       </p>
 
-      <MorningSheet data={morning} nights={nights} target={target} ctx={ctx} onClose={() => setMorning(null)} />
+      <MorningSheet data={morning} nights={nights} target={target} ctx={ctx} cyc={cyc} onClose={() => setMorning(null)} />
       <EditSheet data={edit} onClose={() => setEdit(null)} onSaved={(m) => showToast(m)} />
+      <CycleSheet open={cycleOpen} onClose={() => setCycleOpen(false)} settings={settings} />
       {toast}
     </div>
   );
 }
 
 /* ---------- Đang ngủ ---------- */
-function SleepingCard({ active, onWake, onEdit, onCancel }) {
+function SleepingCard({ active, cyc, best, onWake, onEdit, onCancel }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
@@ -143,6 +153,7 @@ function SleepingCard({ active, onWake, onEdit, onCancel }) {
           Đang ngủ từ {clock(active.start)} · {fmtDate(toDateStr(new Date(active.start)))}
         </div>
         <div className="mt-2 text-[44px] font-bold font-rounded tnum leading-none">{fmtHours(hrs)}</div>
+        {!forgot && <WakeWindows start={active.start} now={now} cyc={cyc} best={best} />}
         {forgot && <p className="mt-2 text-[14px] text-[#ffd60a]">Đã hơn 16 giờ — có vẻ bạn quên bấm “Đã dậy”. Chạm “Sửa giờ” để nhập giờ dậy thật.</p>}
         <motion.button
           whileTap={{ scale: 0.96 }}
@@ -165,9 +176,105 @@ function SleepingCard({ active, onWake, onEdit, onCancel }) {
   );
 }
 
+/* ---------- Chu kỳ ngủ ---------- */
+function CyclePlan({ wake, cyc, best, target, onEdit }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  // 3 lựa chọn quanh mức tốt nhất, không vượt quá giới hạn trên khuyến nghị
+  const opts = [best + 1, best, best - 1, best - 2].filter((n) => n >= 3 && (n * cyc.len) / 60 <= target.max + 0.25).slice(0, 3);
+  return (
+    <div className="mt-3 rounded-[14px] bg-white/10 p-3">
+      <div className="flex items-center justify-between text-[13px] text-white/70">
+        <span>
+          Theo chu kỳ {cyc.len}′ (dậy {fmtClockMin(wake)})
+        </span>
+        <button className="text-white font-semibold" onClick={onEdit}>
+          Chỉnh
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5 mt-2">
+        {opts.map((n) => {
+          const on = n === best;
+          return (
+            <div key={n} className="rounded-[10px] py-1.5 text-center" style={{ background: on ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.08)', color: on ? '#141233' : '#fff' }}>
+              <div className="text-[19px] font-bold font-rounded tnum leading-tight">{fmtClockMin(bedForCycles(wake, n, cyc))}</div>
+              <div className="text-[11px] opacity-75">
+                {n} chu kỳ · {fmtHours((n * cyc.len) / 60)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[12px] text-white/70 mt-2 font-rounded tnum">
+        Ngủ ngay bây giờ → dậy hợp chu kỳ lúc {[4, 5, 6].map((n) => `${clock(wakeForCycles(now, n, cyc))} (${n})`).join(' · ')}
+      </div>
+    </div>
+  );
+}
+
+function WakeWindows({ start, now, cyc, best }) {
+  const opts = [];
+  for (let n = 4; n <= 8 && opts.length < 3; n++) {
+    const t = wakeForCycles(start, n, cyc);
+    if (t > now) opts.push({ n, t });
+  }
+  if (!opts.length) return null;
+  return (
+    <div className="mt-2 text-[13px] text-white/75 font-rounded tnum">
+      Báo thức hợp chu kỳ:{' '}
+      {opts.map((o, i) => (
+        <span key={o.n} className={o.n === best ? 'text-white font-semibold' : ''}>
+          {i ? ' · ' : ''}
+          {clock(o.t)} ({o.n} chu kỳ)
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CycleSheet({ open, onClose, settings }) {
+  const c = cycleOf(settings);
+  const Step = ({ label, hint, value, min, max, step, onChange }) => (
+    <div className="flex items-center gap-3 min-h-[64px] hairline-b last:shadow-none">
+      <div className="flex-1">
+        <div className="text-[16px]">{label}</div>
+        <div className="text-[12px] text-muted">{hint}</div>
+      </div>
+      <button className="press h-10 w-10 rounded-full bg-surface-2 text-[20px] font-semibold disabled:opacity-40" disabled={value <= min} onClick={() => onChange(value - step)} aria-label={`Giảm ${label}`}>
+        −
+      </button>
+      <span className="w-14 text-center text-[19px] font-bold font-rounded tnum">{value}′</span>
+      <button className="press h-10 w-10 rounded-full bg-surface-2 text-[20px] font-semibold disabled:opacity-40" disabled={value >= max} onClick={() => onChange(value + step)} aria-label={`Tăng ${label}`}>
+        +
+      </button>
+    </div>
+  );
+  return (
+    <Sheet open={open} onClose={onClose} title="Chu kỳ ngủ">
+      <p className="text-[15px] text-muted mb-3">
+        Mỗi đêm bạn đi qua 4–6 chu kỳ: ngủ nông → ngủ sâu → REM (mơ). Một chu kỳ trung bình ~90 phút nhưng mỗi người khác nhau (70–120 phút). Dậy lúc hết một chu kỳ thường tỉnh táo hơn dậy giữa giấc sâu.
+      </p>
+      <div className="rounded-[16px] bg-surface px-4">
+        <Step label="Độ dài 1 chu kỳ" hint="Mặc định 90 phút" value={c.len} min={70} max={120} step={5} onChange={(v) => settings.update({ sleepCycleMin: v })} />
+        <Step label="Thời gian để ngủ được" hint="Từ lúc lên giường, thường 10–20 phút" value={c.latency} min={0} max={45} step={5} onChange={(v) => settings.update({ sleepLatencyMin: v })} />
+      </div>
+      <p className="text-[13px] text-muted mt-3">
+        Cách tự chỉnh: vài sáng dậy tự nhiên không báo thức, xem thẻ “Đêm qua”. Nếu app hay báo “dậy giữa chu kỳ” mà bạn vẫn thấy tỉnh, tăng/giảm độ dài chu kỳ 5 phút cho khớp. Đồng hồ chu kỳ chỉ là ước lượng; tổng giờ ngủ đủ vẫn quan trọng hơn.
+      </p>
+      <Button variant="ghost" className="w-full mt-3" onClick={() => settings.update({ sleepCycleMin: 90, sleepLatencyMin: 15 })}>
+        Về mặc định 90′ / 15′
+      </Button>
+    </Sheet>
+  );
+}
+
 /* ---------- Đánh giá một đêm ---------- */
-function NightCard({ night, ev, target, ctx, today }) {
+function NightCard({ night, ev, target, ctx, today, cyc }) {
   const a = assessNight(night, ev, target, ctx);
+  const cy = cyclesOf(night.hours, cyc);
   const g = GRADE[ev.grade];
   const label = night.date === today ? 'Đêm qua' : `Đêm trước ${fmtDate(night.date)}`;
   return (
@@ -189,6 +296,9 @@ function NightCard({ night, ev, target, ctx, today }) {
             <div className="text-[30px] font-bold font-rounded tnum leading-none">{fmtHours(night.hours)}</div>
             <div className="text-[14px] text-muted mt-1 font-rounded tnum">
               {clock(night.bed)} → {clock(night.wake)}
+            </div>
+            <div className="text-[13px] mt-0.5 font-rounded tnum" style={{ color: cy.atEnd ? 'var(--go)' : 'var(--warn)' }}>
+              ≈ {String(Math.round(cy.n * 10) / 10)} chu kỳ · {cy.atEnd ? 'dậy cuối chu kỳ' : `dậy giữa chu kỳ (+${cy.rest}′)`}
             </div>
             <div className="mt-2 h-2 rounded-full bg-surface-2 overflow-hidden relative">
               <div className="absolute inset-y-0 rounded-full" style={{ left: `${(target.min / 11) * 100}%`, width: `${((target.max - target.min) / 11) * 100}%`, background: 'color-mix(in srgb, var(--go) 30%, transparent)' }} />
@@ -249,7 +359,7 @@ function Stars({ value, onChange }) {
 }
 
 /* ---------- Bảng buổi sáng ngay sau khi bấm "Đã dậy" ---------- */
-function MorningSheet({ data, nights, target, ctx, onClose }) {
+function MorningSheet({ data, nights, target, ctx, cyc, onClose }) {
   const night = data && nights.find((n) => n.date === data.date);
   const ev = night ? scoreNight(night, nights, target) : null;
   return (
@@ -270,6 +380,14 @@ function MorningSheet({ data, nights, target, ctx, onClose }) {
               </Rings>
             </motion.div>
             <div className="mt-3 text-[28px] font-bold font-rounded tnum">{fmtHours(night.hours)}</div>
+            {(() => {
+              const cy = cyclesOf(night.hours, cyc);
+              return (
+                <div className="text-[14px] font-rounded tnum" style={{ color: cy.atEnd ? 'var(--go)' : 'var(--warn)' }}>
+                  ≈ {String(Math.round(cy.n * 10) / 10)} chu kỳ · {cy.atEnd ? 'dậy đúng lúc hết chu kỳ' : 'dậy giữa chu kỳ, có thể hơi uể oải 15–30 phút đầu'}
+                </div>
+              );
+            })()}
             <div className="text-muted">
               {clock(night.bed)} → {clock(night.wake)}
             </div>
